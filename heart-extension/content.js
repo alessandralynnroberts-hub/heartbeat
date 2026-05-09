@@ -4,6 +4,10 @@
     if (window.hasAntigravityHeart) return;
     window.hasAntigravityHeart = true;
 
+    // Extension Injection Marker
+    document.documentElement.setAttribute('data-antigravity-heart-active', 'true');
+
+    // State & Config
     const container = document.createElement('div');
     container.className = 'antigravity-heart-container';
     container.id = 'antigravity-heart-container';

@@ -130,6 +130,64 @@ h1, h2, h3, .workspace-title {
     letter-spacing: 2px;
 }
 
+.extension-status-area {
+    margin-top: 16px;
+    animation: fadeIn 1s ease;
+}
+
+.btn-extension-status {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 8px 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #666;
+    border-radius: 50%;
+    box-shadow: 0 0 0px #666;
+    transition: all 0.3s ease;
+}
+
+/* Active State */
+.btn-extension-status.active {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+}
+
+.btn-extension-status.active .status-dot {
+    background: var(--primary);
+    box-shadow: 0 0 10px var(--primary);
+    animation: pulse 1.5s infinite;
+}
+
+/* Missing State */
+.btn-extension-status.missing {
+    border-color: var(--error);
+    color: var(--error);
+}
+.btn-extension-status.missing .status-dot {
+    background: var(--error);
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
 /* Ghost Notes Engine */
 .thoughts-section {
     animation: fadeInUp 0.8s 0.2s ease backwards;

@@ -96,6 +96,43 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
     initApp();
+    checkExtensionStatus();
+});
+
+function checkExtensionStatus() {
+    const statusBtn = document.getElementById('extension-status-btn');
+    const statusText = statusBtn.querySelector('.status-text');
+    
+    // Check for the attribute injected by the extension's content script
+    const isActive = document.documentElement.getAttribute('data-antigravity-heart-active') === 'true';
+    
+    if (isActive) {
+        statusBtn.classList.add('active');
+        statusBtn.classList.remove('missing');
+        statusText.innerText = 'HEARTBEAT ACTIVE';
+    } else {
+        // Try again in a second in case extension was slow to load
+        setTimeout(() => {
+            const retryActive = document.documentElement.getAttribute('data-antigravity-heart-active') === 'true';
+            if (retryActive) {
+                statusBtn.classList.add('active');
+                statusBtn.classList.remove('missing');
+                statusText.innerText = 'HEARTBEAT ACTIVE';
+            } else {
+                statusBtn.classList.add('missing');
+                statusText.innerText = 'EXTENSION MISSING';
+            }
+        }, 1500);
+    }
+}
+
+document.getElementById('extension-status-btn').addEventListener('click', () => {
+    const isActive = document.documentElement.getAttribute('data-antigravity-heart-active') === 'true';
+    if (!isActive) {
+        alert("Heartbeat Extension Not Found!\n\nTo enable it:\n1. Download the extension folder.\n2. Go to chrome://extensions/\n3. Turn on Developer Mode.\n4. Click 'Load unpacked' and select the folder.");
+    } else {
+        alert("Heartbeat Extension is active and pumping! ❤️");
+    }
 });
 
 function initApp() {

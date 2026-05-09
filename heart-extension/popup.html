@@ -3,56 +3,89 @@
 <head>
     <style>
         body {
-            width: 200px;
-            padding: 20px;
-            background-color: #111;
-            color: #fff;
+            width: 300px;
+            padding: 16px;
             font-family: 'Space Mono', monospace;
-            border: 2px solid #fbbf24;
+            background: #000;
+            color: #fbbf24;
             margin: 0;
         }
-        h1 {
-            font-size: 1.2rem;
-            margin: 0 0 15px 0;
-            color: #fbbf24;
+        h2 {
+            font-size: 1.1rem;
             text-transform: uppercase;
+            border-bottom: 2px solid #fbbf24;
+            padding-bottom: 8px;
+            margin-top: 0;
             letter-spacing: 1px;
         }
         .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            margin-bottom: 20px;
         }
         label {
-            font-size: 0.8rem;
+            display: block;
+            font-size: 0.75rem;
+            margin-bottom: 8px;
             color: #a1a1aa;
         }
         input[type="range"] {
             width: 100%;
             accent-color: #fbbf24;
-            cursor: pointer;
+            background: #222;
         }
-        .size-value {
+        .project-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        .project-item {
+            padding: 8px;
+            border-bottom: 1px solid #222;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .project-item:hover {
+            background: rgba(251, 191, 36, 0.1);
+        }
+        .project-item.active {
+            background: var(--primary);
+            color: #000;
             font-weight: bold;
-            color: #fbbf24;
-            text-align: right;
         }
         .footer {
             margin-top: 15px;
-            font-size: 0.7rem;
-            color: #52525b;
+            font-size: 0.6rem;
+            color: #444;
             text-align: center;
         }
     </style>
 </head>
 <body>
-    <h1>Heart Control</h1>
+    <h2>Heartbeat</h2>
+    
     <div class="control-group">
-        <label for="size-slider">Heart Size</label>
-        <input type="range" id="size-slider" min="32" max="256" value="64">
-        <div class="size-value"><span id="current-size">64</span>px</div>
+        <label>HEART SIZE: <span id="sizeValue">64</span>PX</label>
+        <input type="range" id="sizeRange" min="32" max="256" value="64">
     </div>
-    <div class="footer">Keep your projects alive!</div>
+
+    <div class="control-group">
+        <label>SELECT PROJECT TO ACTIVATE:</label>
+        <div id="project-list" class="project-list">
+            <div style="font-size: 0.7rem; color: #666; padding: 10px;">Visit website to sync...</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        PROJECTS SYNCED FROM DASHBOARD
+    </div>
+
+    <!-- Firebase SDKs for project fetching -->
+    <script src="lib/firebase-app-compat.js"></script>
+    <script src="lib/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

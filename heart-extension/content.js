@@ -1,146 +1,132 @@
-// Heartbeat Extension Content Script
+// content.js
+document.documentElement.setAttribute('data-antigravity-heart-active', 'true');
 
-(function() {
-    if (window.hasAntigravityHeart) return;
-    window.hasAntigravityHeart = true;
+const HEART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDIxLjM1bC0xLjQ1LTEuMzJDNS40IDE1LjM2IDIgMTIuMTEgMiA4LjUgMiA1LjQyIDQuNDIgMyA3LjUgM2MxLjc0IDAgMy40MS44MSA0LjUgMi4wOUMxMy4wOSAzLjgxIDE0Ljc2IDMgMTYuNSAzIDM1LjU4IDMgMTggNS40MiAxOCA4LjVjMCAzLjYxLTMuNCA2Ljg2LTguNTUgMTEuODVMMTIgMjEuMzV6IiBmaWxsPSIjZmJiZjI0Ii8+PC9zdmc+`;
 
-    // Extension Injection Marker
-    document.documentElement.setAttribute('data-antigravity-heart-active', 'true');
+// Sync UID and Progress
+function syncAll() {
+    // 1. Sync UID for Popup
+    const uid = document.documentElement.getAttribute('data-heartbeat-uid');
+    if (uid) {
+        chrome.storage.local.set({ heartbeat_uid: uid });
+    }
 
-    // State & Config
-    const container = document.createElement('div');
-    container.className = 'antigravity-heart-container';
-    container.id = 'antigravity-heart-container';
+    // 2. Sync Progress for display
+    const progress = document.documentElement.getAttribute('data-heartbeat-progress');
+    const projectName = document.documentElement.getAttribute('data-heartbeat-project-name');
+    if (progress !== null && projectName !== null) {
+        chrome.storage.local.set({ lastProgress: progress, lastProjectName: projectName });
+        updateUI(progress, projectName);
+    }
+}
 
-    // Heart SVG from the website - Yellow Pixelated Heart
-    container.innerHTML = `
-        <svg class="antigravity-pixel-heart" viewBox="0 0 11 11" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-            <rect x="2" y="2" width="2" height="1" fill="#fbbf24"/>
-            <rect x="7" y="2" width="2" height="1" fill="#fbbf24"/>
-            <rect x="1" y="3" width="4" height="1" fill="#fbbf24"/>
-            <rect x="6" y="3" width="4" height="1" fill="#fbbf24"/>
-            <rect x="0" y="4" width="11" height="2" fill="#fbbf24"/>
-            <rect x="1" y="6" width="9" height="1" fill="#fbbf24"/>
-            <rect x="2" y="7" width="7" height="1" fill="#fbbf24"/>
-            <rect x="3" y="8" width="5" height="1" fill="#fbbf24"/>
-            <rect x="4" y="9" width="3" height="1" fill="#fbbf24"/>
-            <rect x="5" y="10" width="1" height="1" fill="#fbbf24"/>
-        </svg>
+// Watch for changes on the website
+const observer = new MutationObserver(() => syncAll());
+observer.observe(document.documentElement, { attributes: true });
+
+// Initial and Periodic Sync
+syncAll();
+setInterval(syncAll, 2000);
+
+let heartContainer = null;
+let heartImg = null;
+let heartText = null;
+let posX = window.innerWidth - 150, posY = window.innerHeight - 200;
+let velX = 0, velY = 0;
+let isDragging = false;
+let lastMouseX, lastMouseY;
+let currentWidth = 100, currentHeight = 100;
+
+function initHeart() {
+    if (heartContainer || !document.body) return;
+
+    heartContainer = document.createElement('div');
+    heartContainer.id = 'heartbeat-physics-container';
+    heartContainer.style.cssText = `
+        position: fixed; left: ${posX}px; top: ${posY}px;
+        width: ${currentWidth}px; height: ${currentHeight}px;
+        z-index: 9999999; cursor: grab; display: flex;
+        flex-direction: column; align-items: center; justify-content: center;
     `;
 
-    // Physics State
-    let isDragging = false;
-    let x = window.innerWidth - 150;
-    let y = window.innerHeight - 150;
-    let vx = 0;
-    let vy = 0;
-    let lastX = x;
-    let lastY = y;
-    let lastTime = performance.now();
-    let currentSize = 64;
+    heartContainer.innerHTML = `
+        <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+            <img src="${HEART_SVG}" id="heartbeat-pixel-icon" style="width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 0 10px #fbbf24);">
+            <div id="heartbeat-percent-text" style="position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); font-family: 'Space Mono', monospace; font-size: 18px; color: #000; font-weight: bold; pointer-events: none; text-shadow: 1px 1px 0px rgba(255,255,255,0.5);">0%</div>
+            <div id="heartbeat-title-hover" style="position: absolute; top: -25px; background: #fbbf24; color: #000; font-family: monospace; font-size: 10px; padding: 2px 5px; border: 1px solid #000; white-space: nowrap;">SELECT PROJECT</div>
+        </div>
+    `;
 
-    const gravity = 0.8;
-    const friction = 0.99;
-    const bounce = 0.6;
+    document.body.appendChild(heartContainer);
+    heartImg = heartContainer.querySelector('#heartbeat-pixel-icon');
+    heartText = heartContainer.querySelector('#heartbeat-percent-text');
 
-    function updatePhysics() {
-        if (!isDragging) {
-            vy += gravity;
-            vx *= friction;
-            vy *= friction;
-
-            x += vx;
-            y += vy;
-
-            // Boundary checks (Bounce)
-            const right = window.innerWidth - currentSize;
-            const bottom = window.innerHeight - currentSize;
-
-            if (x > right) { x = right; vx *= -bounce; }
-            if (x < 0) { x = 0; vx *= -bounce; }
-            if (y > bottom) { y = bottom; vy *= -bounce; vy = Math.abs(vy) < 1 ? 0 : vy; } // Stop jitter
-            if (y < 0) { y = 0; vy *= -bounce; }
-
-            container.style.left = x + 'px';
-            container.style.top = y + 'px';
-        }
-        requestAnimationFrame(updatePhysics);
-    }
-
-    // Dragging & Throwing Logic
-    container.addEventListener('mousedown', (e) => {
+    heartContainer.onmousedown = (e) => {
         isDragging = true;
-        vx = 0;
-        vy = 0;
-        container.classList.add('vibrating');
-        
-        const offsetX = e.clientX - x;
-        const offsetY = e.clientY - y;
+        velX = 0; velY = 0;
+        lastMouseX = e.clientX; lastMouseY = e.clientY;
+        e.preventDefault();
+    };
 
-        function onMouseMove(e) {
-            const now = performance.now();
-            const dt = now - lastTime;
-            
-            if (dt > 0) {
-                // Calculate velocity for throwing
-                vx = (e.clientX - offsetX - x) / (dt / 16);
-                vy = (e.clientY - offsetY - y) / (dt / 16);
-            }
-
-            x = e.clientX - offsetX;
-            y = e.clientY - offsetY;
-
-            container.style.left = x + 'px';
-            container.style.top = y + 'px';
-            
-            lastTime = now;
+    window.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            posX += dx; posY += dy;
+            velX = dx; velY = dy;
+            lastMouseX = e.clientX; lastMouseY = e.clientY;
+            updatePosition();
         }
-
-        function onMouseUp() {
-            isDragging = false;
-            container.classList.remove('vibrating');
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
     });
 
-    // Ensure injection
-    function init() {
-        if (!document.body) {
-            setTimeout(init, 100);
-            return;
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    startPhysics();
+}
+
+function updatePosition() {
+    if (!heartContainer) return;
+    heartContainer.style.left = posX + 'px';
+    heartContainer.style.top = posY + 'px';
+}
+
+function startPhysics() {
+    const gravity = 0.3;
+    const friction = 0.98;
+    const bounce = 0.7;
+
+    function loop() {
+        if (!isDragging) {
+            velY += gravity;
+            velX *= friction; velY *= friction;
+            posX += velX; posY += velY;
+
+            if (posX + currentWidth > window.innerWidth) { posX = window.innerWidth - currentWidth; velX *= -bounce; }
+            else if (posX < 0) { posX = 0; velX *= -bounce; }
+
+            if (posY + currentHeight > window.innerHeight) { posY = window.innerHeight - currentHeight; velY *= -bounce; }
+            else if (posY < 0) { posY = 0; velY *= -bounce; }
+
+            updatePosition();
         }
-        document.body.appendChild(container);
-        container.style.left = x + 'px';
-        container.style.top = y + 'px';
-        requestAnimationFrame(updatePhysics);
+        if (heartImg) {
+            const scale = 1 + (Math.sin(Date.now() / 200) * 0.05);
+            heartImg.style.transform = `scale(${scale})`;
+        }
+        requestAnimationFrame(loop);
     }
+    requestAnimationFrame(loop);
+}
 
-    init();
+function updateUI(progress, projectName) {
+    if (!heartContainer) return;
+    if (heartText) heartText.innerText = progress + '%';
+    const titleEl = heartContainer.querySelector('#heartbeat-title-hover');
+    if (titleEl) titleEl.innerText = projectName.toUpperCase();
+}
 
-    // Load saved size
-    chrome.storage.sync.get(['heartSize'], (result) => {
-        if (result.heartSize) {
-            updateSize(result.heartSize);
-        }
-    });
-
-    // Listen for size updates
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === 'updateSize') {
-            updateSize(request.size);
-        }
-    });
-
-    function updateSize(size) {
-        currentSize = parseInt(size);
-        const heart = container.querySelector('.antigravity-pixel-heart');
-        if (heart) {
-            heart.style.width = size + 'px';
-            heart.style.height = size + 'px';
-        }
-    }
-})();
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHeart);
+} else {
+    initHeart();
+}
+setTimeout(initHeart, 1000);

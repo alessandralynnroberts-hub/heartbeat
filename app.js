@@ -47,6 +47,15 @@ const progressPercentage = document.getElementById('upload-percentage');
 const PROJECTS_COLLECTION = "vault_projects";
 const FILES_COLLECTION = "vault_files";
 
+// Scroll Observer for Brutalist Animations
+const scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+        }
+    });
+}, { threshold: 0.1 });
+
 /* State Configuration */
 let currentUser = null;
 let currentProjectId = null;
@@ -60,14 +69,6 @@ let dragSourceProjectIndex = null;
 let sessionThoughts = []; // Store thoughts in memory only
 
 /* Scroll Engine */
-const scrollObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            scrollObserver.unobserve(entry.target);
-        }
-    });
-}, { threshold: 0.1 });
 
 const taskTemplates = {
     script: ["Concept Outline", "Character Bios", "First Draft", "Revisions & Edits", "Final Polish", "Formatting"],
@@ -105,24 +106,15 @@ function checkExtensionStatus() {
     
     // Check for the attribute injected by the extension's content script
     const isActive = document.documentElement.getAttribute('data-antigravity-heart-active') === 'true';
+    const hasUID = !!document.documentElement.getAttribute('data-heartbeat-uid');
     
     if (isActive) {
         statusBtn.classList.add('active');
         statusBtn.classList.remove('missing');
-        statusText.innerText = 'HEARTBEAT ACTIVE';
+        statusText.innerText = hasUID ? 'SYNCED & ACTIVE' : 'HEARTBEAT ACTIVE (WAITING FOR SYNC)';
     } else {
-        // Try again in a second in case extension was slow to load
-        setTimeout(() => {
-            const retryActive = document.documentElement.getAttribute('data-antigravity-heart-active') === 'true';
-            if (retryActive) {
-                statusBtn.classList.add('active');
-                statusBtn.classList.remove('missing');
-                statusText.innerText = 'HEARTBEAT ACTIVE';
-            } else {
-                statusBtn.classList.add('missing');
-                statusText.innerText = 'EXTENSION MISSING';
-            }
-        }, 1500);
+        // Try again in a second
+        setTimeout(checkExtensionStatus, 1500);
     }
 }
 
@@ -144,6 +136,11 @@ function initApp() {
             document.getElementById('user-profile').classList.remove('hidden');
             document.getElementById('user-email').innerText = user.email;
             
+            // Sync with extension
+            try {
+                document.documentElement.setAttribute('data-heartbeat-uid', user.uid);
+            } catch (e) { console.error("Sync error", e); }
+
             globalLoading.classList.add('hidden');
             showDashboard();
             fetchProjects();
@@ -197,6 +194,7 @@ function openWorkspace(projectId) {
                 renderWorkspaceHeader();
                 renderTasks();
                 renderGhostThoughts();
+                syncWithExtension(currentProjectData.tasks);
             } else {
                 showDashboard();
             }
@@ -255,7 +253,7 @@ function renderProjectCard(data, docId, index) {
     card.dataset.index = index;
     
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.icon-btn')) return;
+        if (e.target.closest('.activate-btn') || e.target.closest('.icon-btn')) return;
         openWorkspace(docId);
     });
     
@@ -284,10 +282,20 @@ function renderProjectCard(data, docId, index) {
             <span>${data.tasks ? data.tasks.length : 0} tasks</span>
             <span style="color: #fbbf24">${progress}% Complete</span>
         </div>
-        <div class="card-progress-bar">
+        <div class="card-progress-bar" style="margin-top: 20px;">
             <div class="card-progress-fill" style="width: ${progress}%"></div>
         </div>
+        <button class="activate-btn" style="margin-top: 20px; position: relative; z-index: 50;">
+            ACTIVATE HEART
+        </button>
     `;
+
+    const btn = card.querySelector('.activate-btn');
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        activateHeart(null, docId, data.name, data.tasks);
+    };
+
     projectsGrid.appendChild(card);
     scrollObserver.observe(card);
 }
@@ -597,7 +605,51 @@ function saveWorkspaceTasks(updatedTasks) {
     db.collection(PROJECTS_COLLECTION).doc(currentProjectId).update({
         tasks: updatedTasks
     });
+    syncWithExtension(updatedTasks);
 }
+
+function syncWithExtension(tasks) {
+    if (!currentProjectData) return;
+    
+    let total = 0;
+    let completed = 0;
+    (tasks || []).forEach(t => {
+        total++;
+        if (t.completed) completed++;
+        if (t.subtasks) {
+            t.subtasks.forEach(st => {
+                total++;
+                if (st.completed) completed++;
+            });
+        }
+    });
+
+    const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // Sync via DOM Attributes (most reliable for Unpacked extensions)
+    document.documentElement.setAttribute('data-heartbeat-progress', progress);
+    document.documentElement.setAttribute('data-heartbeat-project-name', currentProjectData.name);
+    document.documentElement.setAttribute('data-heartbeat-project-id', currentProjectId);
+}
+
+window.activateHeart = function(e, id, name, tasks) {
+    if (e) e.stopPropagation();
+    
+    // Temporarily set context for sync
+    const originalId = currentProjectId;
+    const originalData = currentProjectData;
+    
+    currentProjectId = id;
+    currentProjectData = { name: name };
+    
+    syncWithExtension(tasks);
+    
+    // Restore context (optional, but safer)
+    currentProjectId = originalId;
+    currentProjectData = originalData;
+    
+    alert(`Heart activated for: ${name} ❤️`);
+};
 
 addTaskBtn.addEventListener('click', () => {
     const text = taskInput.value.trim();

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            width: 200px;
+            padding: 20px;
+            background-color: #111;
+            color: #fff;
+            font-family: 'Space Mono', monospace;
+            border: 2px solid #fbbf24;
+            margin: 0;
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin: 0 0 15px 0;
+            color: #fbbf24;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        label {
+            font-size: 0.8rem;
+            color: #a1a1aa;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #fbbf24;
+            cursor: pointer;
+        }
+        .size-value {
+            font-weight: bold;
+            color: #fbbf24;
+            text-align: right;
+        }
+        .footer {
+            margin-top: 15px;
+            font-size: 0.7rem;
+            color: #52525b;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Heart Control</h1>
+    <div class="control-group">
+        <label for="size-slider">Heart Size</label>
+        <input type="range" id="size-slider" min="32" max="256" value="64">
+        <div class="size-value"><span id="current-size">64</span>px</div>
+    </div>
+    <div class="footer">Keep your projects alive!</div>
+    <script src="popup.js"></script>
+</body>
+</html>

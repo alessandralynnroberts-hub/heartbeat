@@ -1,0 +1,751 @@
+/* DOM Elements */
+const globalLoading = document.getElementById('global-loading');
+const dashboardView = document.getElementById('dashboard-view');
+const workspaceView = document.getElementById('workspace-view');
+
+const projectsGrid = document.getElementById('projects-grid');
+const addProjectBtn = document.getElementById('add-project-btn');
+
+// Modal Elements
+const modalOverlay = document.getElementById('modal-overlay');
+const modalCancel = document.getElementById('modal-cancel');
+const modalCreate = document.getElementById('modal-create');
+const newProjectName = document.getElementById('new-project-name');
+const newProjectType = document.getElementById('new-project-type');
+
+const duplicateModalOverlay = document.getElementById('duplicate-modal-overlay');
+const duplicateProjectName = document.getElementById('duplicate-project-name');
+const duplicateCopyFiles = document.getElementById('duplicate-copy-files');
+const duplicateModalCancel = document.getElementById('duplicate-modal-cancel');
+const duplicateModalCreate = document.getElementById('duplicate-modal-create');
+
+// Workspace Elements
+const backBtn = document.getElementById('back-btn');
+const workspaceTitle = document.getElementById('workspace-title');
+const workspaceTypeBadge = document.getElementById('workspace-type-badge');
+const workspaceDuplicateBtn = document.getElementById('workspace-duplicate-btn');
+const achievementBar = document.getElementById('achievement-bar');
+
+const taskInput = document.getElementById('task-input');
+const addTaskBtn = document.getElementById('add-task-btn');
+const tasksListEl = document.getElementById('tasks-list');
+
+// File Upload Elements
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const browseBtn = document.getElementById('browse-btn');
+const filesList = document.getElementById('files-list');
+const fileCount = document.getElementById('file-count');
+const emptyAssetsState = document.getElementById('empty-assets-state');
+
+const progressContainer = document.getElementById('upload-progress-container');
+const progressBar = document.getElementById('progress-bar');
+const progressFilename = document.getElementById('upload-filename');
+const progressPercentage = document.getElementById('upload-percentage');
+
+/* Database Collections */
+const PROJECTS_COLLECTION = "vault_projects";
+const FILES_COLLECTION = "vault_files";
+
+/* State Configuration */
+let currentUser = null;
+let currentProjectId = null;
+let currentProjectData = null;
+let projectsUnsubscribe = null;
+let filesUnsubscribe = null;
+let projectDocUnsubscribe = null;
+let dragSourceIndex = null;
+let allProjectsArray = [];
+let dragSourceProjectIndex = null;
+let sessionThoughts = []; // Store thoughts in memory only
+
+/* Scroll Engine */
+const scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            scrollObserver.unobserve(entry.target);
+        }
+    });
+}, { threshold: 0.1 });
+
+const taskTemplates = {
+    script: ["Concept Outline", "Character Bios", "First Draft", "Revisions & Edits", "Final Polish", "Formatting"],
+    film: ["Screenwriting", "Storyboarding", "Casting & Auditions", "Location Scouting", "Pre-Production Planning", "Principal Photography", "Audio Editing", "Video Editing", "Color Grading", "Final Cut & Distribution"],
+    photography: ["Concept & Planning", "Location Scouting", "Shoot Setup & Lighting", "Photo Session", "Selecting Best Shots", "Retouching & Editing", "Final Export & Delivery"],
+    'visual-art': ["Concept & Sketching", "Canvas Preparation", "Underpainting", "Primary Colors & Blocking In", "Detailing & Texturing", "Refining & Highlights", "Varnishing & Finishing"],
+    animation: ["Concept Design", "Storyboarding", "Animatic Production", "Character Modeling / Rigging", "Keyframe Animation", "In-betweening", "Lighting & Rendering", "Compositing & Effects", "Audio Syncing", "Final Export"],
+    novel: ["Brainstorming & Outline", "Worldbuilding", "Character Development", "First Draft - Act I", "First Draft - Act II", "First Draft - Act III", "Developmental Edits", "Line Edits", "Proofreading", "Final Polish"],
+    'game-design': ["Game Concept & Pitch", "Core Mechanics Design", "Concept Art & Moodboards", "Prototyping", "Asset Creation (Models/Sprites/Audio)", "Level Design", "Programming & Scripting", "Playtesting & Balancing", "Bug Fixing & Polish", "Release & Publishing"]
+};
+
+// Listen for connection / Fetch initial data
+document.addEventListener("DOMContentLoaded", () => {
+    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+        globalLoading.innerHTML = `
+            <div style="color: var(--error); margin-bottom: 8px;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <p><strong>Configuration Missing</strong></p>
+            <p style="font-size: 0.9rem; margin-top: 4px;">Please add your Firebase credentials to <code>firebase-config.js</code></p>
+        `;
+        return;
+    }
+    initApp();
+});
+
+function initApp() {
+    // Listen for Auth State
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('sign-in-btn').classList.add('hidden');
+            document.getElementById('user-profile').classList.remove('hidden');
+            document.getElementById('user-email').innerText = user.email;
+            
+            globalLoading.classList.add('hidden');
+            showDashboard();
+            fetchProjects();
+        } else {
+            currentUser = null;
+            document.getElementById('sign-in-btn').classList.remove('hidden');
+            document.getElementById('user-profile').classList.add('hidden');
+            
+            projectsGrid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1 / -1;">
+                    <p>Please Sign In to view your projects.</p>
+                </div>
+            `;
+            dashboardView.classList.remove('hidden');
+            globalLoading.classList.add('hidden');
+        }
+    });
+}
+
+// Auth Handlers
+document.getElementById('sign-in-btn').addEventListener('click', () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(err => alert("Sign-in failed: " + err.message));
+});
+
+document.getElementById('sign-out-btn').addEventListener('click', () => {
+    auth.signOut();
+});
+
+/* Routing / Views */
+function showDashboard() {
+    workspaceView.classList.add('hidden');
+    dashboardView.classList.remove('hidden');
+    currentProjectId = null;
+    currentProjectData = null;
+    
+    if (filesUnsubscribe) filesUnsubscribe();
+    if (projectDocUnsubscribe) projectDocUnsubscribe();
+}
+
+function openWorkspace(projectId) {
+    currentProjectId = projectId;
+    dashboardView.classList.add('hidden');
+    workspaceView.classList.remove('hidden');
+    
+    // Subscribe to specific project changes
+    projectDocUnsubscribe = db.collection(PROJECTS_COLLECTION).doc(projectId)
+        .onSnapshot((doc) => {
+            if (doc.exists) {
+                currentProjectData = doc.data();
+                renderWorkspaceHeader();
+                renderTasks();
+                renderGhostThoughts();
+            } else {
+                showDashboard();
+            }
+        });
+}
+
+backBtn.addEventListener('click', showDashboard);
+
+/* Dashboard & Projects Logic */
+function fetchProjects() {
+    if (!currentUser) return;
+    
+    projectsUnsubscribe = db.collection(PROJECTS_COLLECTION)
+        .where("userId", "==", currentUser.uid)
+        .onSnapshot((snapshot) => {
+            projectsGrid.innerHTML = '';
+            
+            if (snapshot.empty) {
+                projectsGrid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <p>No projects found. Create one to get started!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            allProjectsArray = [];
+            snapshot.forEach((doc) => {
+                allProjectsArray.push({ id: doc.id, ...doc.data() });
+            });
+            
+            // Client-Side Sort dynamically bypassing default Creation Timestamp
+            allProjectsArray.sort((a, b) => {
+                if (a.order !== undefined && b.order !== undefined) {
+                    return a.order - b.order;
+                }
+                if (a.order !== undefined) return -1;
+                if (b.order !== undefined) return 1;
+                
+                const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
+                const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
+                return timeB - timeA;
+            });
+
+            allProjectsArray.forEach((data, index) => {
+                renderProjectCard(data, data.id, index);
+            });
+        });
+}
+
+function renderProjectCard(data, docId, index) {
+    const card = document.createElement('div');
+    card.className = 'project-card scroll-reveal';
+    
+    card.draggable = true;
+    card.dataset.index = index;
+    
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.icon-btn')) return;
+        openWorkspace(docId);
+    });
+    
+    card.addEventListener('dragstart', handleProjectDragStart);
+    card.addEventListener('dragover', handleProjectDragOver);
+    card.addEventListener('dragenter', handleProjectDragEnter);
+    card.addEventListener('dragleave', handleProjectDragLeave);
+    card.addEventListener('dragend', handleProjectDragEnd);
+    card.addEventListener('drop', handleProjectDrop);
+    
+    let progress = 0;
+    if (data.tasks && data.tasks.length > 0) {
+        const completed = data.tasks.filter(t => t.completed).length;
+        progress = Math.round((completed / data.tasks.length) * 100);
+    }
+    
+    card.innerHTML = `
+        <div style="display:flex; justify-content: space-between; align-items:flex-start;">
+            <h3>${data.name}</h3>
+            <button class="icon-btn" onclick="openDuplicateModal(event, '${docId}', '${data.name.replace(/'/g, "\\'")}', '${data.type}', '${encodeURIComponent(JSON.stringify(data.tasks))}')" title="Duplicate Project">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+        </div>
+        <p>${data.type}</p>
+        <div class="card-meta">
+            <span>${data.tasks ? data.tasks.length : 0} tasks</span>
+            <span style="color: #fbbf24">${progress}% Complete</span>
+        </div>
+        <div class="card-progress-bar">
+            <div class="card-progress-fill" style="width: ${progress}%"></div>
+        </div>
+    `;
+    projectsGrid.appendChild(card);
+    scrollObserver.observe(card);
+}
+
+/* Project Dashboard DND Engine */
+function handleProjectDragStart(e) {
+    dragSourceProjectIndex = parseInt(this.dataset.index);
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.dataset.index);
+}
+
+function handleProjectDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleProjectDragEnter(e) {
+    this.classList.add('drag-over');
+}
+
+function handleProjectDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function handleProjectDragEnd(e) {
+    this.classList.remove('dragging');
+    const cards = projectsGrid.querySelectorAll('.project-card');
+    cards.forEach(card => card.classList.remove('drag-over'));
+}
+
+function handleProjectDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    this.classList.remove('drag-over');
+    
+    const dragTargetIndex = parseInt(this.dataset.index);
+    if (dragSourceProjectIndex !== null && dragSourceProjectIndex !== dragTargetIndex) {
+        
+        const draggedProject = allProjectsArray.splice(dragSourceProjectIndex, 1)[0];
+        allProjectsArray.splice(dragTargetIndex, 0, draggedProject);
+        
+        const batch = db.batch();
+        allProjectsArray.forEach((proj, idx) => {
+            const docRef = db.collection(PROJECTS_COLLECTION).doc(proj.id);
+            batch.update(docRef, { order: idx });
+        });
+        
+        batch.commit().catch(err => {
+            console.error("Batch Order Error:", err);
+            alert("Error syncing new arrangement to Firebase");
+        });
+    }
+    return false;
+}
+
+// Modal handling
+addProjectBtn.addEventListener('click', () => {
+    newProjectName.value = "";
+    newProjectType.selectedIndex = 0;
+    modalOverlay.classList.remove('hidden');
+});
+modalCancel.addEventListener('click', () => modalOverlay.classList.add('hidden'));
+
+modalCreate.addEventListener('click', () => {
+    const name = newProjectName.value.trim();
+    const type = newProjectType.value;
+    if (!name) return alert("Please enter a project name!");
+    
+    let initialTasks = [];
+    if (taskTemplates[type]) {
+        initialTasks = taskTemplates[type].map(text => ({ text, completed: false }));
+    }
+    
+    // Close modal instantly for immediate UI feedback
+    newProjectName.value = "";
+    modalOverlay.classList.add('hidden');
+    
+    db.collection(PROJECTS_COLLECTION).add({
+        name: name,
+        type: type,
+        tasks: initialTasks,
+        userId: currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(err => {
+        alert("Error creating project: " + err.message);
+        modalOverlay.classList.remove('hidden'); // reopen on failure
+    });
+});
+
+/* Duplicate Logic Flow */
+let duplicateSourceId = null;
+let duplicateSourceType = null;
+let duplicateSourceTasks = null;
+
+window.openDuplicateModal = function(e, id, name, type, tasksJson) {
+    if (e) e.stopPropagation(); // prevent clicking card to open workspace
+    
+    duplicateSourceId = id;
+    duplicateSourceType = type;
+    if (tasksJson) {
+        duplicateSourceTasks = typeof tasksJson === 'string' ? JSON.parse(decodeURIComponent(tasksJson)) : tasksJson;
+    } else {
+        duplicateSourceTasks = [];
+    }
+    
+    duplicateProjectName.value = name + " - copy";
+    duplicateCopyFiles.checked = false;
+    duplicateModalOverlay.classList.remove('hidden');
+};
+
+workspaceDuplicateBtn.addEventListener('click', () => {
+    if (!currentProjectData || !currentProjectId) return;
+    openDuplicateModal(null, currentProjectId, currentProjectData.name, currentProjectData.type, currentProjectData.tasks);
+});
+
+duplicateModalCancel.addEventListener('click', () => {
+    duplicateModalOverlay.classList.add('hidden');
+});
+
+duplicateModalCreate.addEventListener('click', () => {
+    const newName = duplicateProjectName.value.trim();
+    if (!newName) return alert("Please enter a duplicate project name!");
+    
+    const shouldCopyFiles = duplicateCopyFiles.checked;
+    duplicateModalOverlay.classList.add('hidden');
+    
+    db.collection(PROJECTS_COLLECTION).add({
+        name: newName,
+        type: duplicateSourceType,
+        tasks: duplicateSourceTasks, 
+        userId: currentUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then((docRef) => {
+        if (shouldCopyFiles) {
+            copyProjectFiles(duplicateSourceId, docRef.id);
+        }
+    }).catch(err => {
+        alert("Error duplicating project: " + err.message);
+        duplicateModalOverlay.classList.remove('hidden');
+    });
+});
+
+function copyProjectFiles(originalId, newId) {
+    db.collection(FILES_COLLECTION).where("projectId", "==", originalId).get()
+    .then((querySnapshot) => {
+        if (querySnapshot.empty) return;
+        
+        // Use batch to clone references gracefully identically.
+        let batch = db.batch();
+        querySnapshot.forEach((doc) => {
+            let data = doc.data();
+            let newDocRef = db.collection(FILES_COLLECTION).doc(); 
+            data.projectId = newId;
+            data.uploadedAt = firebase.firestore.FieldValue.serverTimestamp(); // Give it a fresh timestamp physically.
+            batch.set(newDocRef, data);
+        });
+        
+        return batch.commit();
+    }).catch(err => {
+        console.error("Error batch copying files: ", err);
+        alert("Tasks duplicated perfectly, but encountered an error replicating file linkages.");
+    });
+}
+
+/* Workspace Logic */
+function renderWorkspaceHeader() {
+    if (!currentProjectData) return;
+    workspaceTitle.innerText = currentProjectData.name;
+    workspaceTypeBadge.innerText = currentProjectData.type;
+}
+
+function renderTasks() {
+    tasksListEl.innerHTML = '';
+    const tasks = currentProjectData.tasks || [];
+    let completedCount = 0;
+    
+    tasks.forEach((task, index) => {
+        if (task.completed) completedCount++;
+        
+        let subtasksHTML = '';
+        
+        if (task.subtasks) {
+            task.subtasks.forEach((st, sIndex) => {
+                subtasksHTML += `
+                    <li class="subtask-item ${st.completed ? 'completed' : ''}">
+                        <input type="checkbox" class="task-checkbox" ${st.completed ? 'checked' : ''} onchange="toggleSubtask(${index}, ${sIndex})">
+                        <span style="flex:1;">${st.text}</span>
+                        <button class="task-delete" onclick="deleteSubtask(${index}, ${sIndex})" style="padding: 2px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                        </button>
+                    </li>
+                `;
+            });
+        }
+        
+        const isExpanded = task.expanded ? '' : 'hidden';
+        
+        const li = document.createElement('li');
+        li.className = `task-item ${task.completed ? 'completed' : ''}`;
+        li.draggable = true;
+        li.dataset.index = index;
+        
+        li.addEventListener('dragstart', handleDragStart);
+        li.addEventListener('dragover', handleDragOver);
+        li.addEventListener('drop', handleDrop);
+        li.addEventListener('dragenter', handleDragEnter);
+        li.addEventListener('dragleave', handleDragLeave);
+        li.addEventListener('dragend', handleDragEnd);
+        
+        li.innerHTML = `
+            <div class="task-content">
+                <button class="task-toggle" onclick="toggleTaskExpand(${index})">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform: rotate(${task.expanded ? '90deg' : '0deg'})"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask(${index})">
+                <span class="task-text">${task.text}</span>
+                <button class="task-delete" onclick="deleteTask(${index})">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="subtasks-wrapper ${isExpanded}" id="subtasks-${index}">
+                <ul class="subtasks-list">
+                    ${subtasksHTML}
+                </ul>
+                <div class="subtask-input-row">
+                    <input type="text" id="subtask-input-${index}" class="custom-input" placeholder="Add smaller goal..." onkeypress="if(event.key === 'Enter') addSubtask(${index})">
+                    <button class="btn-primary" onclick="addSubtask(${index})">Add</button>
+                </div>
+            </div>
+        `;
+        tasksListEl.appendChild(li);
+    });
+    
+    // Update Achievement Bar UI globally based on all items (tasks and subtasks)
+    let totalItems = 0;
+    let completedItems = 0;
+    
+    tasks.forEach(task => {
+        totalItems++;
+        if (task.completed) completedItems++;
+        
+        if (task.subtasks) {
+            task.subtasks.forEach(st => {
+                totalItems++;
+                if (st.completed) completedItems++;
+            });
+        }
+    });
+
+    let progress = 0;
+    if (totalItems > 0) {
+        progress = Math.round((completedItems / totalItems) * 100);
+    }
+    achievementBar.style.width = progress + '%';
+}
+
+/* Drag and Drop Engine */
+function handleDragStart(e) {
+    dragSourceIndex = parseInt(this.dataset.index);
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.dataset.index);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault(); // allow drop
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    this.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    const items = tasksListEl.querySelectorAll('.task-item');
+    items.forEach(item => item.classList.remove('drag-over'));
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    
+    const dragTargetIndex = parseInt(this.dataset.index);
+    
+    if (dragSourceIndex !== null && dragSourceIndex !== dragTargetIndex) {
+        if (!currentProjectData) return false;
+        const tasks = currentProjectData.tasks;
+        
+        // Remove task from array
+        const draggedTask = tasks.splice(dragSourceIndex, 1)[0];
+        // Insert task directly into target index
+        tasks.splice(dragTargetIndex, 0, draggedTask);
+        
+        saveWorkspaceTasks(tasks);
+    }
+    return false;
+}
+
+function saveWorkspaceTasks(updatedTasks) {
+    if (!currentProjectId) return;
+    db.collection(PROJECTS_COLLECTION).doc(currentProjectId).update({
+        tasks: updatedTasks
+    });
+}
+
+addTaskBtn.addEventListener('click', () => {
+    const text = taskInput.value.trim();
+    if (text && currentProjectData) {
+        const tasks = currentProjectData.tasks || [];
+        tasks.push({ text, completed: false });
+        saveWorkspaceTasks(tasks);
+        taskInput.value = '';
+    }
+});
+
+taskInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addTaskBtn.click();
+});
+
+window.toggleTaskExpand = function(index) {
+    if (!currentProjectData) return;
+    const tasks = currentProjectData.tasks;
+    tasks[index].expanded = !tasks[index].expanded;
+    saveWorkspaceTasks(tasks); 
+};
+
+window.addSubtask = function(parentIndex) {
+    if (!currentProjectData) return;
+    const input = document.getElementById('subtask-input-' + parentIndex);
+    const text = input.value.trim();
+    if (text) {
+        const tasks = currentProjectData.tasks;
+        if (!tasks[parentIndex].subtasks) tasks[parentIndex].subtasks = [];
+        tasks[parentIndex].subtasks.push({ text, completed: false });
+        saveWorkspaceTasks(tasks);
+    }
+};
+
+window.toggleSubtask = function(parentIndex, subIndex) {
+    if (!currentProjectData) return;
+    const tasks = currentProjectData.tasks;
+    tasks[parentIndex].subtasks[subIndex].completed = !tasks[parentIndex].subtasks[subIndex].completed;
+    saveWorkspaceTasks(tasks);
+};
+
+window.deleteSubtask = function(parentIndex, subIndex) {
+    if (!currentProjectData) return;
+    const tasks = currentProjectData.tasks;
+    tasks[parentIndex].subtasks.splice(subIndex, 1);
+    saveWorkspaceTasks(tasks);
+};
+
+window.toggleTask = function(index) {
+    if (!currentProjectData) return;
+    const tasks = currentProjectData.tasks;
+    tasks[index].completed = !tasks[index].completed;
+    
+    if (tasks[index].completed) {
+        window.fireConfetti();
+    }
+    
+    saveWorkspaceTasks(tasks);
+};
+
+window.fireConfetti = function() {
+    const colors = ['#00ffcc', '#3b82f6', '#fbbf24', '#ec4899', '#ffffff'];
+    const bar = document.getElementById('achievement-bar');
+    if (!bar) return;
+    
+    const rect = bar.getBoundingClientRect();
+    // Origin mapping dynamically scales against completion width
+    const originX = rect.left + rect.width;
+    const originY = rect.top + (rect.height / 2);
+    
+    for (let i = 0; i < 30; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'pixel-confetti';
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.left = originX + 'px';
+        confetti.style.top = originY + 'px';
+        
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 50 + Math.random() * 200;
+        const dx = Math.cos(angle) * velocity;
+        const dy = (Math.sin(angle) * velocity) + 150; // gravity
+        const rot = Math.random() * 360 + 180;
+        
+        confetti.style.setProperty('--dx', dx + 'px');
+        confetti.style.setProperty('--dy', dy + 'px');
+        confetti.style.setProperty('--rot', rot + 'deg');
+        
+        document.body.appendChild(confetti);
+        
+        // Ensure DOM purges the elements natively after sequence ends
+        setTimeout(() => confetti.remove(), 1000);
+    }
+};
+
+window.deleteTask = function(index) {
+    if(!currentProjectData) return;
+    const tasks = currentProjectData.tasks;
+    tasks.splice(index, 1);
+    saveWorkspaceTasks(tasks);
+};
+
+/* Ghost Notes Mechanics */
+const thoughtInput = document.getElementById('thought-input');
+const thoughtsContainer = document.getElementById('thoughts-container');
+
+if (thoughtInput) {
+    thoughtInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const text = thoughtInput.value.trim();
+            if (text) {
+                sessionThoughts.unshift(text); // Session only - erased on refresh
+                thoughtInput.value = ''; 
+                renderGhostThoughts();
+            }
+        }
+    });
+}
+
+function renderGhostThoughts() {
+    if (!thoughtsContainer) return;
+    thoughtsContainer.innerHTML = '';
+    
+    sessionThoughts.forEach((thoughtText) => {
+        const span = document.createElement('span');
+        span.className = 'ghost-thought scroll-reveal';
+        span.innerText = thoughtText;
+        thoughtsContainer.appendChild(span);
+        scrollObserver.observe(span);
+    });
+}
+
+/* Background Doodle Engine */
+const canvas = document.getElementById('bg-canvas');
+let ctx = null;
+let isDrawing = false;
+let lastX = 0; let lastY = 0;
+
+if (canvas) {
+    ctx = canvas.getContext('2d');
+    
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    
+    window.addEventListener('mousedown', (e) => {
+        // Enforce limitation specifically tracking Dashboard View visibility
+        if (!dashboardView || dashboardView.classList.contains('hidden')) return;
+        // Block drawing if clicking physically on top of a UI element native to the user
+        if (e.target.closest('.project-card, button, input, a, .modal-content, .empty-state')) return;
+        
+        isDrawing = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+        if (!isDrawing || !ctx) return;
+        
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(e.clientX, e.clientY);
+        ctx.strokeStyle = '#fbbf24'; // Neon Yellow strictly applied
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        
+        lastX = e.clientX;
+        lastY = e.clientY;
+    });
+    
+    window.addEventListener('mouseup', () => {
+        if (!isDrawing || !ctx) return;
+        isDrawing = false;
+        
+        // Drops absolute layer opacity natively for burning the drawings iteratively
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    });
+    
+    window.addEventListener('mouseleave', () => {
+        isDrawing = false;
+    });
+}

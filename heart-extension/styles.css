@@ -1,0 +1,67 @@
+/* Heartbeat Extension Styles */
+
+.antigravity-heart-container {
+    position: fixed !important;
+    top: 100px;
+    left: 100px;
+    z-index: 2147483647 !important; /* Maximum possible z-index */
+    cursor: grab;
+    pointer-events: auto !important;
+    user-select: none;
+    -webkit-user-drag: none;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    padding: 0;
+    margin: 0;
+    line-height: 0;
+}
+
+.antigravity-heart-container:active {
+    cursor: grabbing;
+}
+
+.antigravity-pixel-heart {
+    width: 64px;
+    height: 64px;
+    display: block;
+    filter: drop-shadow(4px 4px 0px rgba(0,0,0,0.5));
+    pointer-events: none; /* Let container handle clicks */
+}
+
+.antigravity-heart-container:hover .antigravity-pixel-heart {
+    animation: violentShake 0.15s infinite;
+}
+
+.antigravity-heart-container.vibrating .antigravity-pixel-heart {
+    animation: violentShake 0.1s infinite;
+}
+
+@keyframes violentShake {
+    0% { 
+        transform: translate(0, 0) rotate(0deg) scale(1); 
+        filter: drop-shadow(0px 0px 0px #ec4899); 
+    }
+    20% { 
+        transform: translate(-6px, 6px) rotate(-15deg) scale(1.3); 
+        filter: drop-shadow(4px 4px 0px #ec4899); 
+    }
+    40% { 
+        transform: translate(6px, -6px) rotate(15deg) scale(1.1); 
+        filter: drop-shadow(-4px -4px 0px #ec4899); 
+    }
+    60% { 
+        transform: translate(-6px, -6px) rotate(-8deg) scale(1.4); 
+    }
+    80% { 
+        transform: translate(6px, 6px) rotate(8deg) scale(1.2); 
+    }
+    100% { 
+        transform: translate(0, 0) rotate(0deg) scale(1.1); 
+    }
+}
+
+/* Reset for the injected SVG */
+.antigravity-pixel-heart rect {
+    fill: #fbbf24 !important;
+}

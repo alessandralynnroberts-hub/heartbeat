@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Heartbeat Web App",
+  "version": "1.0",
+  "description": "The Heartbeat Artist Management system running as an extension to bypass server requirements.",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": ["identity", "storage"]
+}

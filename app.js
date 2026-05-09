@@ -47,6 +47,21 @@ const progressPercentage = document.getElementById('upload-percentage');
 const PROJECTS_COLLECTION = "vault_projects";
 const FILES_COLLECTION = "vault_files";
 
+const socialGrid = document.getElementById('social-grid');
+const myProjectsContainer = document.getElementById('my-projects-container');
+const socialProjectsContainer = document.getElementById('social-projects-container');
+const tabMyProjects = document.getElementById('tab-my-projects');
+const tabSocial = document.getElementById('tab-social');
+
+const shareModalOverlay = document.getElementById('share-modal-overlay');
+const shareEmailInput = document.getElementById('share-email');
+const shareModalCancel = document.getElementById('share-modal-cancel');
+const shareModalSend = document.getElementById('share-modal-send');
+
+let socialProjectsUnsubscribe = null;
+let socialProjectsArray = [];
+let shareProjectId = null;
+
 // Scroll Observer for Brutalist Animations
 const scrollObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -177,8 +192,51 @@ function showDashboard() {
     currentProjectId = null;
     currentProjectData = null;
     
+    // Reset tabs
+    tabMyProjects.click();
+
     if (filesUnsubscribe) filesUnsubscribe();
     if (projectDocUnsubscribe) projectDocUnsubscribe();
+}
+
+tabMyProjects.addEventListener('click', () => {
+    tabMyProjects.classList.add('active');
+    tabSocial.classList.remove('active');
+    myProjectsContainer.classList.remove('hidden');
+    socialProjectsContainer.classList.add('hidden');
+});
+
+tabSocial.addEventListener('click', () => {
+    tabSocial.classList.add('active');
+    tabMyProjects.classList.remove('active');
+    socialProjectsContainer.classList.remove('hidden');
+    myProjectsContainer.classList.add('hidden');
+    fetchSocialProjects();
+});
+
+function fetchSocialProjects() {
+    if (!currentUser) return;
+    
+    if (socialProjectsUnsubscribe) socialProjectsUnsubscribe();
+
+    socialProjectsUnsubscribe = db.collection(PROJECTS_COLLECTION)
+        .where("sharedWith", "array-contains", currentUser.email)
+        .onSnapshot((snapshot) => {
+            socialGrid.innerHTML = '';
+            
+            if (snapshot.empty) {
+                socialGrid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <p>No projects shared with you yet. Invite your friends to Heartbeat!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            snapshot.forEach((doc) => {
+                renderSocialProjectCard(doc.data(), doc.id);
+            });
+        });
 }
 
 function openWorkspace(projectId) {
@@ -273,9 +331,12 @@ function renderProjectCard(data, docId, index) {
     card.innerHTML = `
         <div style="display:flex; justify-content: space-between; align-items:flex-start;">
             <h3>${data.name}</h3>
-            <button class="icon-btn" onclick="openDuplicateModal(event, '${docId}', '${data.name.replace(/'/g, "\\'")}', '${data.type}', '${encodeURIComponent(JSON.stringify(data.tasks))}')" title="Duplicate Project">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            </button>
+            <div style="display:flex; gap: 8px;">
+                <button class="share-btn" onclick="openShareModal(event, '${docId}')">SHARE</button>
+                <button class="icon-btn" onclick="openDuplicateModal(event, '${docId}', '${data.name.replace(/'/g, "\\'")}', '${data.type}', '${encodeURIComponent(JSON.stringify(data.tasks))}')" title="Duplicate Project">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+            </div>
         </div>
         <p>${data.type}</p>
         <div class="card-meta">
@@ -299,6 +360,77 @@ function renderProjectCard(data, docId, index) {
     projectsGrid.appendChild(card);
     scrollObserver.observe(card);
 }
+
+function renderSocialProjectCard(data, docId) {
+    const card = document.createElement('div');
+    card.className = 'project-card scroll-reveal';
+    
+    let progress = 0;
+    if (data.tasks && data.tasks.length > 0) {
+        const completed = data.tasks.filter(t => t.completed).length;
+        progress = Math.round((completed / data.tasks.length) * 100);
+    }
+    
+    card.innerHTML = `
+        <span class="friend-badge">FROM: ${data.userEmail || 'A Friend'}</span>
+        <h3>${data.name}</h3>
+        <p>${data.type}</p>
+        <div class="card-meta">
+            <span>${data.tasks ? data.tasks.length : 0} tasks</span>
+            <span style="color: #fbbf24">${progress}% Complete</span>
+        </div>
+        <div class="card-progress-bar" style="margin-top: 20px;">
+            <div class="card-progress-fill" style="width: ${progress}%"></div>
+        </div>
+        <button class="activate-btn" style="margin-top: 20px; position: relative; z-index: 50;">
+            TRACK FRIEND
+        </button>
+    `;
+
+    const btn = card.querySelector('.activate-btn');
+    btn.onclick = (e) => {
+        e.stopPropagation();
+        activateHeart(null, docId, data.name, data.tasks);
+    };
+
+    socialGrid.appendChild(card);
+    scrollObserver.observe(card);
+}
+
+/* Share Modal Logic */
+window.openShareModal = function(e, projectId) {
+    if (e) e.stopPropagation();
+    shareProjectId = projectId;
+    shareEmailInput.value = '';
+    shareModalOverlay.classList.remove('hidden');
+};
+
+shareModalCancel.addEventListener('click', () => {
+    shareModalOverlay.classList.add('hidden');
+});
+
+shareModalSend.addEventListener('click', () => {
+    const email = shareEmailInput.value.trim().toLowerCase();
+    if (!email) {
+        alert("Please enter a valid email.");
+        return;
+    }
+    
+    if (email === currentUser.email) {
+        alert("You cannot share a project with yourself!");
+        return;
+    }
+
+    db.collection(PROJECTS_COLLECTION).doc(shareProjectId).update({
+        sharedWith: firebase.firestore.FieldValue.arrayUnion(email)
+    }).then(() => {
+        alert("Invitation sent! Your friend can now see your progress on their dashboard.");
+        shareModalOverlay.classList.add('hidden');
+    }).catch(err => {
+        console.error("Share error", err);
+        alert("Failed to share project: " + err.message);
+    });
+});
 
 /* Project Dashboard DND Engine */
 function handleProjectDragStart(e) {
@@ -379,6 +511,8 @@ modalCreate.addEventListener('click', () => {
         type: type,
         tasks: initialTasks,
         userId: currentUser.uid,
+        userEmail: currentUser.email,
+        sharedWith: [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     }).catch(err => {
         alert("Error creating project: " + err.message);

@@ -899,3 +899,69 @@ h1, h2, h3, .workspace-title {
     75% { transform: translate(-3px, -7px) rotate(-1deg); }
     100% { transform: translate(-5px, -5px) rotate(0deg); }
 }
+
+/* Dashboard Tabs */
+.dashboard-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 10px 20px;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.tab-btn.active {
+    color: var(--primary);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--primary);
+    box-shadow: 0px 4px 0px rgba(251, 191, 36, 0.3);
+}
+
+.tab-btn:hover {
+    color: var(--text-main);
+}
+
+.share-btn {
+    background: var(--secondary) !important;
+    color: #fff !important;
+    border: 1px solid #000 !important;
+    font-size: 0.6rem !important;
+    padding: 2px 8px !important;
+    margin-left: 10px !important;
+    font-weight: bold !important;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.friend-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    font-size: 0.7rem;
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 10px;
+    text-transform: lowercase;
+}

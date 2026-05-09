@@ -66,15 +66,31 @@
 
             <!-- DASHBOARD VIEW -->
             <section id="dashboard-view" class="view hidden">
-                <div class="dashboard-header">
-                    <button id="add-project-btn" class="btn-primary">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                        New Project
-                    </button>
+                <div class="dashboard-tabs">
+                    <button id="tab-my-projects" class="tab-btn active">My Projects</button>
+                    <button id="tab-social" class="tab-btn">Friends' Progress</button>
                 </div>
-                
-                <div id="projects-grid" class="projects-grid">
-                    <!-- Projects populated dynamically -->
+
+                <div id="my-projects-container">
+                    <div class="dashboard-header">
+                        <button id="add-project-btn" class="btn-primary">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            New Project
+                        </button>
+                    </div>
+                    
+                    <div id="projects-grid" class="projects-grid">
+                        <!-- Projects populated dynamically -->
+                    </div>
+                </div>
+
+                <div id="social-projects-container" class="hidden">
+                    <div class="dashboard-header">
+                        <h2>Friends' Progress</h2>
+                    </div>
+                    <div id="social-grid" class="projects-grid">
+                        <!-- Shared projects populated dynamically -->
+                    </div>
                 </div>
             </section>
 
@@ -172,6 +188,22 @@
             <div style="display:flex; justify-content: flex-end; gap: 12px;">
                 <button id="duplicate-modal-cancel" class="btn-secondary">Cancel</button>
                 <button id="duplicate-modal-create" class="btn-primary">Create Duplicate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Share Project -->
+    <div id="share-modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2 style="margin-bottom: 20px;">Share Project</h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">Invite a friend to track your progress. They will see your heart pulse on their dashboard!</p>
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label>Friend's Email</label>
+                <input type="email" id="share-email" class="custom-input" placeholder="friend@example.com">
+            </div>
+            <div style="display:flex; justify-content: flex-end; gap: 12px;">
+                <button id="share-modal-cancel" class="btn-secondary">Cancel</button>
+                <button id="share-modal-send" class="btn-primary">Invite Friend</button>
             </div>
         </div>
     </div>

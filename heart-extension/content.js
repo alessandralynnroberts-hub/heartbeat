@@ -1,24 +1,44 @@
 // content.js
 document.documentElement.setAttribute('data-antigravity-heart-active', 'true');
 
-// Pixel Heart SVG (Yellow)
-const HEART_SVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMSAxMSIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj4KICAgIDxyZWN0IHg9IjIiIHk9IjIiIHdpZHRoPSIyIiBoZWlnaHQ9IjEiIGZpbGw9IiNmYmJmMjQiLz4KICAgIDxyZWN0IHg9IjciIHk9IjIiIHdpZHRoPSIyIiBoZWlnaHQ9IjEiIGZpbGw9IiNmYmJmMjQiLz4KICAgIDxyZWN0IHg9IjEiIHk9IjMiIHdpZHRoPSI0IiBoZWlnaHQ9IjEiIGZpbGw9IiNmYmJmMjQiLz4KICAgIDxyZWN0IHg9IjYiIHk9IjMiIHdpZHRoPSI0IiBoZWlnaHQ9IjEiIGZpbGw9IiNmYmJmMjQiLz4KICAgIDxyZWN0IHg9IjAiIHk9IjQiIHdpZHRoPSIxMSIgaGVpZ2h0PSIyIiBmaWxsPSIjZmJiZjI0Ii8+CiAgICA8cmVjdCB4PSIxIiB5PSI2IiB3aWR0aD0iOSIgaGVpZ2h0PSIxIiBmaWxsPSIjZmJiZjI0Ii8+CiAgICA8cmVjdCB4PSIyIiB5PSI3IiB3aWR0aD0iNyIgaGVpZ2h0PSIxIiBmaWxsPSIjZmJiZjI0Ii8+CiAgICA8cmVjdCB4PSIzIiB5PSI4IiB3aWR0aD0iNSIgaGVpZ2h0PSIxIiBmaWxsPSIjZmJiZjI0Ii8+CiAgICA8cmVjdCB4PSI0IiB5PSI5IiB3aWR0aD0iMyIgaGVpZ2h0PSIxIiBmaWxsPSIjZmJiZjI0Ii8+CiAgICA8cmVjdCB4PSI1IiB5PSIxMCIgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0iI2ZiYmYyNCIvPgo8L3N2Zz4=`;
+// Raw SVG for better reliability
+const HEART_SVG_RAW = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 11 11" shape-rendering="crispEdges">
+    <rect x="2" y="2" width="2" height="1" fill="#fbbf24"/>
+    <rect x="7" y="2" width="2" height="1" fill="#fbbf24"/>
+    <rect x="1" y="3" width="4" height="1" fill="#fbbf24"/>
+    <rect x="6" y="3" width="4" height="1" fill="#fbbf24"/>
+    <rect x="0" y="4" width="11" height="2" fill="#fbbf24"/>
+    <rect x="1" y="6" width="9" height="1" fill="#fbbf24"/>
+    <rect x="2" y="7" width="7" height="1" fill="#fbbf24"/>
+    <rect x="3" y="8" width="5" height="1" fill="#fbbf24"/>
+    <rect x="4" y="9" width="3" height="1" fill="#fbbf24"/>
+    <rect x="5" y="10" width="1" height="1" fill="#fbbf24"/>
+</svg>`;
 
-// Inject Vibration CSS
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes heartVibrate {
-        0% { transform: translate(0,0) rotate(0deg); }
-        25% { transform: translate(-2px, 2px) rotate(1deg); }
-        50% { transform: translate(2px, -2px) rotate(-1deg); }
-        75% { transform: translate(-2px, -2px) rotate(1deg); }
-        100% { transform: translate(0,0) rotate(0deg); }
+const HEART_SVG_DATA = "data:image/svg+xml;base64," + btoa(HEART_SVG_RAW);
+
+function injectStyles() {
+    if (!document.head) {
+        setTimeout(injectStyles, 100);
+        return;
     }
-    .heart-vibrate:hover #heartbeat-pixel-icon {
-        animation: heartVibrate 0.1s infinite !important;
-    }
-`;
-document.head.appendChild(style);
+    const style = document.createElement('style');
+    style.id = 'heartbeat-styles';
+    style.textContent = `
+        @keyframes heartVibrate {
+            0% { transform: translate(0,0) rotate(0deg); }
+            25% { transform: translate(-2px, 2px) rotate(1deg); }
+            50% { transform: translate(2px, -2px) rotate(-1deg); }
+            75% { transform: translate(-2px, -2px) rotate(1deg); }
+            100% { transform: translate(0,0) rotate(0deg); }
+        }
+        .heart-vibrate:hover #heartbeat-pixel-icon {
+            animation: heartVibrate 0.1s infinite !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+injectStyles();
 
 function syncAll() {
     const uid = document.documentElement.getAttribute('data-heartbeat-uid');
@@ -40,22 +60,30 @@ setInterval(syncAll, 2000);
 let heartContainer = null;
 let heartImg = null;
 let progressFill = null;
-let posX = window.innerWidth - 150, posY = window.innerHeight - 200;
+let posX = 100, posY = 100; // Defaults
 let velX = 0, velY = 0;
 let isDragging = false;
 let lastMouseX, lastMouseY;
 let currentSize = 100;
+let isInitializing = false;
 
 function initHeart() {
-    if (heartContainer || !document.body) return;
+    if (heartContainer || !document.body || isInitializing) return;
+    isInitializing = true;
+
+    posX = window.innerWidth - 150;
+    posY = window.innerHeight - 200;
 
     chrome.storage.local.get(['heartSize'], (data) => {
         if (data.heartSize) currentSize = parseInt(data.heartSize);
         createHeartUI();
+        isInitializing = false;
     });
 }
 
 function createHeartUI() {
+    if (heartContainer) return;
+
     heartContainer = document.createElement('div');
     heartContainer.id = 'heartbeat-physics-container';
     heartContainer.className = 'heart-vibrate';
@@ -64,24 +92,28 @@ function createHeartUI() {
         width: ${currentSize}px; height: ${currentSize}px;
         z-index: 9999999; cursor: grab; display: flex;
         flex-direction: column; align-items: center; justify-content: center;
+        pointer-events: auto;
     `;
 
     heartContainer.innerHTML = `
-        <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
-            <img src="${HEART_SVG}" id="heartbeat-pixel-icon" style="width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 0 10px #fbbf24); transition: transform 0.1s;">
+        <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+            <img src="${HEART_SVG_DATA}" id="heartbeat-pixel-icon" style="width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 0 10px #fbbf24); transition: transform 0.1s; pointer-events: auto;">
             
-            <!-- Progress Bar Overlay -->
-            <div id="heartbeat-progress-track" style="position: absolute; bottom: 35%; left: 15%; width: 70%; height: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); overflow: hidden; border-radius: 2px; pointer-events: none;">
+            <div id="heartbeat-progress-track" style="position: absolute; bottom: 35%; left: 15%; width: 70%; height: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); overflow: hidden; border-radius: 2px;">
                 <div id="heartbeat-progress-fill" style="width: 0%; height: 100%; background: #3b82f6; box-shadow: 0 0 5px #3b82f6; transition: width 0.3s ease;"></div>
             </div>
 
-            <div id="heartbeat-title-hover" style="position: absolute; top: -25px; background: #fbbf24; color: #000; font-family: monospace; font-size: 10px; padding: 2px 5px; border: 1px solid #000; white-space: nowrap; font-weight: bold;">SELECT PROJECT</div>
+            <div id="heartbeat-title-hover" style="position: absolute; top: -25px; background: #fbbf24; color: #000; font-family: monospace; font-size: 10px; padding: 2px 5px; border: 1px solid #000; white-space: nowrap; font-weight: bold; opacity: 0; transition: opacity 0.2s;">SELECT PROJECT</div>
         </div>
     `;
 
     document.body.appendChild(heartContainer);
     heartImg = heartContainer.querySelector('#heartbeat-pixel-icon');
     progressFill = heartContainer.querySelector('#heartbeat-progress-fill');
+    const titleEl = heartContainer.querySelector('#heartbeat-title-hover');
+
+    heartContainer.onmouseenter = () => { if (titleEl) titleEl.style.opacity = "1"; };
+    heartContainer.onmouseleave = () => { if (titleEl) titleEl.style.opacity = "0"; };
 
     heartContainer.onmousedown = (e) => {
         isDragging = true;
@@ -103,9 +135,8 @@ function createHeartUI() {
 
     window.addEventListener('mouseup', () => { isDragging = false; });
     
-    // Listen for size changes from popup
     chrome.storage.onChanged.addListener((changes) => {
-        if (changes.heartSize) {
+        if (changes.heartSize && heartContainer) {
             currentSize = parseInt(changes.heartSize.newValue);
             heartContainer.style.width = currentSize + 'px';
             heartContainer.style.height = currentSize + 'px';
@@ -127,7 +158,7 @@ function startPhysics() {
     const bounce = 0.7;
 
     function loop() {
-        if (!isDragging) {
+        if (!isDragging && heartContainer) {
             velY += gravity;
             velX *= friction; velY *= friction;
             posX += velX; posY += velY;
@@ -161,4 +192,7 @@ if (document.readyState === 'loading') {
 } else {
     initHeart();
 }
-setTimeout(initHeart, 1000);
+// Multi-pass initialization check
+setTimeout(initHeart, 500);
+setTimeout(initHeart, 1500);
+setTimeout(initHeart, 3000);

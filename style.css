@@ -862,42 +862,41 @@ h1, h2, h3, .workspace-title {
     text-transform: capitalize;
 }
 /* Activate Heart Button */
-/* Activate Heart Button */
 .activate-btn {
     width: 100%;
-    background: #ffff00; /* Neon Yellow */
+    background: var(--primary);
     color: #000;
-    border: 4px solid #000;
-    padding: 20px;
+    border: 2px solid #000;
+    padding: 12px;
     font-family: 'Space Mono', monospace;
-    font-size: 1.2rem;
-    font-weight: 900;
+    font-size: 0.9rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 3px;
+    letter-spacing: 1px;
     cursor: pointer;
     transition: all 0.1s;
-    box-shadow: 10px 10px 0px #000;
+    box-shadow: 4px 4px 0px #000;
     position: relative;
     z-index: 20;
 }
 
 .activate-btn:hover {
-    transform: translate(-5px, -5px);
-    box-shadow: 15px 15px 0px #000;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px #000;
     background: #fff;
     animation: buttonVibrate 0.1s infinite;
 }
 
 .activate-btn:active {
-    transform: translate(5px, 5px);
+    transform: translate(2px, 2px);
     box-shadow: 0px 0px 0px #000;
 }
 
 @keyframes buttonVibrate {
-    0% { transform: translate(-5px, -5px) rotate(0deg); }
-    25% { transform: translate(-7px, -3px) rotate(1deg); }
-    75% { transform: translate(-3px, -7px) rotate(-1deg); }
-    100% { transform: translate(-5px, -5px) rotate(0deg); }
+    0% { transform: translate(-2px, -2px) rotate(0deg); }
+    25% { transform: translate(-3px, -1px) rotate(1deg); }
+    75% { transform: translate(-1px, -3px) rotate(-1deg); }
+    100% { transform: translate(-2px, -2px) rotate(0deg); }
 }
 
 /* Dashboard Tabs */

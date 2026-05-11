@@ -5,7 +5,7 @@ const firebaseConfig = {
   storageBucket: "keep-your-projects-alive.firebasestorage.app",
   messagingSenderId: "514938379771",
   appId: "1:514938379771:web:1687233dc82a0d31513f5e",
-  youtubeApiKey: "YOUR_YOUTUBE_API_KEY"
+  youtubeApiKey: "AIzaSyBzMsOZCDfhCzLVJ_xGZrjvO6FDSH1BpJg"
 };
 
 // Initialize Firebase App

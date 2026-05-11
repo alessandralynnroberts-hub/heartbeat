@@ -113,7 +113,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     initApp();
     checkExtensionStatus();
-    if (typeof initASMR === 'function') initASMR();
+    try {
+        if (typeof initASMR === 'function') initASMR();
+    } catch (e) { console.error("ASMR Init Error:", e); }
 });
 
 function checkExtensionStatus() {
@@ -969,7 +971,11 @@ if (canvas) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     });
-    
+    window.addEventListener('mouseleave', () => {
+        isDrawing = false;
+    });
+}
+
 /* ASMR SYSTEM LOGIC */
 let asmrStore = {
     videos: JSON.parse(localStorage.getItem('heartbeat_asmr_videos') || '[]'),

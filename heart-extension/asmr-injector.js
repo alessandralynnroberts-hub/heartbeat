@@ -1,7 +1,7 @@
 // asmr-injector.js
 (function() {
     if (window.asmrPlayerInitialized) {
-        console.log("[ASMR Lifecycle] Injector already active.");
+        console.log("[ASMR Transfer] Injector already active.");
         return;
     }
     window.asmrPlayerInitialized = true;
@@ -12,13 +12,16 @@
     let heartbeatInterval = null;
     let videoData = null;
     let resumeOverlay = null;
+    let failsafeTimeout = null;
 
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'ASMR_UI_RENDER') {
+            console.log("[ASMR Transfer] RENDER received. Video:", msg.video.videoId);
             videoData = msg.video;
             renderPlayer(msg.video, msg.time, msg.volume, msg.props);
         }
         if (msg.type === 'ASMR_UI_REMOVE') {
+            console.log("[ASMR Transfer] REMOVE received.");
             removePlayer();
         }
         if (msg.type === 'GET_STATE_SNAPSHOT') {
@@ -41,6 +44,7 @@
         }
 
         if (!container) {
+            console.log("[ASMR Transfer] Initializing container...");
             host = host || document.createElement('div');
             host.id = 'heartbeat-asmr-host';
             if (!host.parentElement) document.body.appendChild(host);
@@ -72,8 +76,9 @@
                 </div>
                 <div class="asmr-video-wrapper" style="flex:1;background:#000;min-height:100px;position:relative;">
                     <div id="player-target" style="width:100%;height:100%;"></div>
-                    <div id="resume-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;color:#fbbf24;font-family:monospace;font-size:10px;z-index:10;transition:opacity 0.5s;">
-                        RESUMING FOCUS AUDIO...
+                    <div id="resume-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fbbf24;font-family:monospace;font-size:10px;z-index:10;transition:opacity 0.5s;">
+                        <div id="resume-status">RESUMING FOCUS AUDIO...</div>
+                        <button id="manual-play-btn" style="display:none;margin-top:10px;background:#fbbf24;color:#000;border:none;padding:5px 10px;cursor:pointer;font-weight:bold;">CLICK TO RESUME</button>
                     </div>
                 </div>
                 <div class="asmr-resize-handle"></div>
@@ -99,34 +104,63 @@
         const startSec = startTime || 0;
         const target = shadow.getElementById('player-target');
 
-        loadYouTubeAPI(() => {
-            if (player) {
-                try { player.loadVideoById(video.videoId, startSec); } catch(e) {}
-            } else {
-                player = new YT.Player(target, {
-                    height: '100%', width: '100%', videoId: video.videoId,
-                    host: 'https://www.youtube-nocookie.com',
-                    playerVars: { 
-                        'autoplay': 1, 'controls': 1, 'start': Math.floor(startSec), 
-                        'origin': window.location.origin, 'modestbranding': 1, 'rel': 0 
-                    },
-                    events: {
-                        'onReady': (event) => { 
-                            if (volume !== undefined) event.target.setVolume(volume);
-                            event.target.seekTo(startSec, true);
-                            startHeartbeat();
-                        },
-                        'onStateChange': (event) => { 
-                            if (event.data === YT.PlayerState.PLAYING) {
-                                if (resumeOverlay) resumeOverlay.style.opacity = '0';
-                                setTimeout(() => { if (resumeOverlay) resumeOverlay.style.display = 'none'; }, 500);
-                            }
-                            if (event.data === YT.PlayerState.PAUSED) syncState(true); 
-                        }
-                    }
-                });
+        // Failsafe Timer: 5 seconds
+        if (failsafeTimeout) clearTimeout(failsafeTimeout);
+        failsafeTimeout = setTimeout(() => {
+            console.warn("[ASMR Transfer] Failsafe triggered. Manual intervention required.");
+            const status = shadow.getElementById('resume-status');
+            const btn = shadow.getElementById('manual-play-btn');
+            if (status) status.innerText = "PLAYBACK STALLED";
+            if (btn) {
+                btn.style.display = 'block';
+                btn.onclick = () => {
+                    if (player && player.playVideo) player.playVideo();
+                    hideOverlay();
+                };
             }
+        }, 5000);
+
+        console.log("[ASMR Transfer] Attempting player creation...");
+        loadYouTubeAPI(() => {
+            console.log("[ASMR Transfer] API Ready. Initializing player instance.");
+            player = new YT.Player(target, {
+                height: '100%', width: '100%', videoId: video.videoId,
+                host: 'https://www.youtube-nocookie.com',
+                playerVars: { 
+                    'autoplay': 1, 'controls': 1, 'start': Math.floor(startSec), 
+                    'origin': window.location.origin, 'modestbranding': 1, 'rel': 0 
+                },
+                events: {
+                    'onReady': (event) => { 
+                        console.log("[ASMR Transfer] onReady fired. Seeking to:", startSec);
+                        if (failsafeTimeout) clearTimeout(failsafeTimeout);
+                        if (volume !== undefined) event.target.setVolume(volume);
+                        event.target.seekTo(startSec, true);
+                        event.target.playVideo();
+                        startHeartbeat();
+                    },
+                    'onStateChange': (event) => { 
+                        console.log("[ASMR Transfer] State change:", event.data);
+                        if (event.data === YT.PlayerState.PLAYING) {
+                            hideOverlay();
+                        }
+                        if (event.data === YT.PlayerState.PAUSED) syncState(true); 
+                    },
+                    'onError': (e) => {
+                        console.error("[ASMR Transfer] Player Error:", e.data);
+                        hideOverlay(); // Don't block user if error occurs
+                    }
+                }
+            });
         });
+    }
+
+    function hideOverlay() {
+        if (failsafeTimeout) clearTimeout(failsafeTimeout);
+        if (resumeOverlay) {
+            resumeOverlay.style.opacity = '0';
+            setTimeout(() => { if (resumeOverlay) resumeOverlay.style.display = 'none'; }, 500);
+        }
     }
 
     function updatePlayerProps(props) {
@@ -173,6 +207,7 @@
     }
 
     function removePlayer() {
+        if (failsafeTimeout) clearTimeout(failsafeTimeout);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         if (player) { try { player.destroy(); } catch(e) {} }
         const host = document.getElementById('heartbeat-asmr-host');

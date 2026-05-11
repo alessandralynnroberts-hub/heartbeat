@@ -72,29 +72,40 @@
         if (props.isMinimized) container.classList.add('minimized');
 
         loadYouTubeAPI(() => {
+            const startSec = Math.floor(startTime || 0);
             if (player) {
-                player.loadVideoById(video.videoId, startTime);
+                try { player.loadVideoById(video.videoId, startSec); } catch(e) {}
             } else {
-                player = new YT.Player(shadow.getElementById('player-target'), {
+                const target = shadow.getElementById('player-target');
+                if (!target) return;
+                
+                player = new YT.Player(target, {
                     height: '100%',
                     width: '100%',
                     videoId: video.videoId,
+                    host: 'https://www.youtube-nocookie.com',
                     playerVars: {
                         'autoplay': 1,
                         'controls': 1,
                         'modestbranding': 1,
                         'rel': 0,
-                        'start': Math.floor(startTime)
+                        'start': startSec,
+                        'origin': window.location.origin
                     },
                     events: {
                         'onReady': (event) => {
-                            if (startTime > 0) event.target.seekTo(startTime);
+                            if (startSec > 0) event.target.seekTo(startSec);
                             startHeartbeat();
                         },
                         'onStateChange': (event) => {
                             if (event.data === YT.PlayerState.PAUSED) {
-                                syncState(true); // Immediate sync on pause
+                                syncState(true);
                             }
+                        },
+                        'onError': (e) => {
+                            console.error("YT Player Error:", e.data);
+                            // Fallback to simple iframe if API fails
+                            target.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&start=${startSec}" style="width:100%;height:100%;border:none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
                         }
                     }
                 });
@@ -105,11 +116,24 @@
     function loadYouTubeAPI(callback) {
         if (window.YT && window.YT.Player) return callback();
         
-        window.onYouTubeIframeAPIReady = callback;
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        // Handle multiple calls while loading
+        const existingCallback = window.onYouTubeIframeAPIReady;
+        window.onYouTubeIframeAPIReady = () => {
+            if (existingCallback) existingCallback();
+            callback();
+        };
+
+        if (!document.getElementById('yt-iframe-api')) {
+            const tag = document.createElement('script');
+            tag.id = 'yt-iframe-api';
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            if (firstScriptTag) {
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            } else {
+                document.head.appendChild(tag);
+            }
+        }
     }
 
     function startHeartbeat() {

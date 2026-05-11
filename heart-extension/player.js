@@ -32,8 +32,8 @@ function renderIframe(video, startTime) {
 
     const wrapper = document.getElementById('player-wrapper');
     wrapper.innerHTML = `<iframe
-        src="https://www.youtube.com/embed/${video.videoId}?autoplay=1&start=${startSec}&rel=0&modestbranding=1"
-        allow="autoplay; encrypted-media"
+        src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&start=${startSec}&rel=0&modestbranding=1&fs=1"
+        allow="autoplay; encrypted-media; fullscreen"
         allowfullscreen>
     </iframe>`;
 }

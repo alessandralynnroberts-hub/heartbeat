@@ -22,12 +22,13 @@
 
     function renderPlayer(video, startTime, props) {
         if (!container) {
-            const host = document.createElement('div');
+            const host = document.getElementById('heartbeat-asmr-host') || document.createElement('div');
             host.id = 'heartbeat-asmr-host';
-            document.body.appendChild(host);
-            shadow = host.attachShadow({ mode: 'open' });
+            if (!host.parentElement) document.body.appendChild(host);
             
-            // Inject Styles
+            shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+            shadow.innerHTML = ''; // Clear previous
+            
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = chrome.runtime.getURL('asmr-player.css');
@@ -35,21 +36,26 @@
 
             container = document.createElement('div');
             container.className = 'asmr-player-container';
+            // Force visibility styles in case CSS fails to load
+            container.style.cssText = `
+                position: fixed; background: #000; border: 2px solid #fbbf24;
+                z-index: 2147483647; display: flex; flex-direction: column;
+                box-shadow: 10px 10px 0px #000; overflow: hidden;
+            `;
             shadow.appendChild(container);
 
             container.innerHTML = `
-                <div class="asmr-player-header">
-                    <span class="asmr-title">${video.title}</span>
+                <div class="asmr-player-header" style="background:#fbbf24;color:#000;padding:4px 12px;display:flex;justify-content:space-between;cursor:move;font-weight:bold;">
+                    <span>FOCUS: ${video.title}</span>
                     <div class="asmr-player-controls">
-                        <button class="minimize-btn" title="Minimize">_</button>
-                        <button class="close-btn" title="Close">×</button>
+                        <button class="minimize-btn">_</button>
+                        <button class="close-btn">×</button>
                     </div>
                 </div>
-                <div class="asmr-video-wrapper" id="player-target"></div>
+                <div class="asmr-video-wrapper" id="player-target" style="flex:1;background:#000;min-height:100px;"></div>
                 <div class="asmr-resize-handle"></div>
             `;
 
-            // Setup Event Handlers
             initDraggable(container, shadow.querySelector('.asmr-player-header'));
             initResizable(container, shadow.querySelector('.asmr-resize-handle'));
             
@@ -60,58 +66,46 @@
             
             shadow.querySelector('.minimize-btn').onclick = () => {
                 container.classList.toggle('minimized');
-                syncState();
+                syncState(true);
             };
         }
 
-        // Apply Props
-        container.style.left = props.x + 'px';
-        container.style.top = props.y + 'px';
-        container.style.width = props.width + 'px';
-        container.style.height = props.height + 'px';
-        if (props.isMinimized) container.classList.add('minimized');
+        const p = props || { x: 20, y: 80, width: 320, height: 180 };
+        container.style.left = p.x + 'px';
+        container.style.top = p.y + 'px';
+        container.style.width = p.width + 'px';
+        container.style.height = p.height + 'px';
+        if (p.isMinimized) container.classList.add('minimized');
 
+        const startSec = Math.floor(startTime || 0);
+        const target = shadow.getElementById('player-target');
+
+        // Immediate direct iframe fallback for robustness
+        target.innerHTML = `<iframe 
+            src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&start=${startSec}&rel=0&modestbranding=1" 
+            style="width:100%;height:100%;border:none;" 
+            allow="autoplay; encrypted-media" 
+            allowfullscreen>
+        </iframe>`;
+
+        // Attempt advanced JS API for timestamp tracking
         loadYouTubeAPI(() => {
-            const startSec = Math.floor(startTime || 0);
             if (player) {
                 try { player.loadVideoById(video.videoId, startSec); } catch(e) {}
             } else {
-                const target = shadow.getElementById('player-target');
-                if (!target) return;
-                
                 player = new YT.Player(target, {
-                    height: '100%',
-                    width: '100%',
-                    videoId: video.videoId,
+                    height: '100%', width: '100%', videoId: video.videoId,
                     host: 'https://www.youtube-nocookie.com',
-                    playerVars: {
-                        'autoplay': 1,
-                        'controls': 1,
-                        'modestbranding': 1,
-                        'rel': 0,
-                        'start': startSec,
-                        'origin': window.location.origin
-                    },
+                    playerVars: { 'autoplay': 1, 'controls': 1, 'start': startSec, 'origin': window.location.origin },
                     events: {
-                        'onReady': (event) => {
-                            if (startSec > 0) event.target.seekTo(startSec);
-                            startHeartbeat();
-                        },
-                        'onStateChange': (event) => {
-                            if (event.data === YT.PlayerState.PAUSED) {
-                                syncState(true);
-                            }
-                        },
-                        'onError': (e) => {
-                            console.error("YT Player Error:", e.data);
-                            // Fallback to simple iframe if API fails
-                            target.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&start=${startSec}" style="width:100%;height:100%;border:none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-                        }
+                        'onReady': (event) => { startHeartbeat(); },
+                        'onStateChange': (event) => { if (event.data === YT.PlayerState.PAUSED) syncState(true); }
                     }
                 });
             }
         });
     }
+
 
     function loadYouTubeAPI(callback) {
         if (window.YT && window.YT.Player) return callback();

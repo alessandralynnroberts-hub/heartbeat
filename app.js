@@ -154,6 +154,7 @@ function initApp() {
             // Sync with extension
             try {
                 document.documentElement.setAttribute('data-heartbeat-uid', user.uid);
+                document.documentElement.setAttribute('data-heartbeat-email', user.email);
             } catch (e) { console.error("Sync error", e); }
 
             globalLoading.classList.add('hidden');

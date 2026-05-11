@@ -44,7 +44,9 @@ function syncAll() {
     
     if (isHeartbeatSite) {
         const uid = document.documentElement.getAttribute('data-heartbeat-uid');
+        const email = document.documentElement.getAttribute('data-heartbeat-email');
         if (uid) chrome.storage.local.set({ heartbeat_uid: uid });
+        if (email) chrome.storage.local.set({ heartbeat_email: email });
 
         const progress = document.documentElement.getAttribute('data-heartbeat-progress');
         const projectName = document.documentElement.getAttribute('data-heartbeat-project-name');

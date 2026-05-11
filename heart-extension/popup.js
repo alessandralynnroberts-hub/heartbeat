@@ -25,9 +25,9 @@ function initSync() {
     
     const db = firebase.firestore();
 
-    chrome.storage.local.get(['heartbeat_uid', 'lastProjectId'], (data) => {
+    chrome.storage.local.get(['heartbeat_uid', 'heartbeat_email', 'lastProjectId'], (data) => {
         if (data.heartbeat_uid) {
-            fetchProjects(db, data.heartbeat_uid, data.lastProjectId);
+            fetchProjects(db, data.heartbeat_uid, data.heartbeat_email, data.lastProjectId);
         } else {
             projectListEl.innerHTML = `
                 <div style="font-size: 0.7rem; color: #666; padding: 10px; text-align: center;">
@@ -44,23 +44,41 @@ function initSync() {
     });
 }
 
-function fetchProjects(db, uid, activeId) {
-    db.collection("vault_projects")
-        .where("userId", "==", uid)
-        .get()
-        .then((snapshot) => {
+function fetchProjects(db, uid, email, activeId) {
+    const ownedQuery = db.collection("vault_projects").where("userId", "==", uid).get();
+    
+    let queries = [ownedQuery];
+    if (email) {
+        queries.push(db.collection("vault_projects").where("sharedWith", "array-contains", email).get());
+    }
+
+    Promise.all(queries)
+        .then((snapshots) => {
             projectListEl.innerHTML = '';
-            if (snapshot.empty) {
+            const allDocs = new Map(); // Use Map to avoid duplicates
+
+            snapshots.forEach(snapshot => {
+                snapshot.forEach(doc => {
+                    allDocs.set(doc.id, doc.data());
+                });
+            });
+
+            if (allDocs.size === 0) {
                 projectListEl.innerHTML = '<div style="font-size: 0.7rem; color: #666; padding: 10px;">No projects found.</div>';
                 return;
             }
 
-            snapshot.forEach((doc) => {
-                const project = doc.data();
+            allDocs.forEach((project, id) => {
                 const item = document.createElement('div');
-                item.className = 'project-item' + (activeId === doc.id ? ' active' : '');
-                item.innerText = project.name;
-                item.onclick = () => activateFromPopup(doc.id, project.name, project.tasks);
+                item.className = 'project-item' + (activeId === id ? ' active' : '');
+                
+                const isShared = project.userId !== uid;
+                item.innerHTML = `
+                    ${project.name} 
+                    ${isShared ? '<span style="font-size: 0.6rem; color: #fbbf24; opacity: 0.8; margin-left: 5px;">(SHARED)</span>' : ''}
+                `;
+                
+                item.onclick = () => activateFromPopup(id, project.name, project.tasks);
                 projectListEl.appendChild(item);
             });
         })
@@ -98,7 +116,10 @@ function activateFromPopup(id, name, tasks) {
 
         // Update UI in popup
         const items = document.querySelectorAll('.project-item');
-        items.forEach(item => item.classList.toggle('active', item.innerText === name));
+        items.forEach(item => {
+            const itemName = item.innerText.split('(SHARED)')[0].trim();
+            item.classList.toggle('active', itemName === name);
+        });
     });
 }
 

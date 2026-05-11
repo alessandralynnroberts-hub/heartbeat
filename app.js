@@ -1143,10 +1143,11 @@ function playASMRVideo(video) {
         ts: Date.now()
     }));
     
-    // Hide local player since extension is taking over
+    // SINGLETON HANDOFF: Fully shut down local player
     if (playerContainer) {
         playerContainer.classList.add('hidden');
-        title.innerText = video.title; // For consistency
+        if (wrapper) wrapper.innerHTML = ''; // Destroy the local iframe immediately
+        title.innerText = video.title; 
     }
 }
 

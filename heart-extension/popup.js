@@ -123,4 +123,50 @@ function activateFromPopup(id, name, tasks) {
     });
 }
 
+// 3. ASMR Library Sync
+const asmrListEl = document.getElementById('asmr-list');
+
+function initASMRSync() {
+    chrome.storage.local.get(['asmr_library'], (data) => {
+        renderASMRLibrary(data.asmr_library || []);
+    });
+}
+
+function renderASMRLibrary(videos) {
+    if (!asmrListEl) return;
+    if (videos.length === 0) {
+        asmrListEl.innerHTML = '<div style="font-size: 0.7rem; color: #666; padding: 10px;">Add videos on website...</div>';
+        return;
+    }
+
+    asmrListEl.innerHTML = '';
+    videos.forEach(video => {
+        const item = document.createElement('div');
+        item.className = 'project-item';
+        item.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 32px; height: 18px; background-image: url('${video.thumbnail}'); background-size: cover; border: 1px solid #333;"></div>
+                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${video.title}</div>
+            </div>
+        `;
+        item.onclick = () => {
+            chrome.runtime.sendMessage({
+                type: 'ASMR_PLAY',
+                video: video,
+                startTime: 0
+            });
+            window.close(); // Close popup after selection
+        };
+        asmrListEl.appendChild(item);
+    });
+}
+
+// Listen for library updates
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.asmr_library) {
+        renderASMRLibrary(changes.asmr_library.newValue || []);
+    }
+});
+
 initSync();
+initASMRSync();

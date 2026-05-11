@@ -993,6 +993,14 @@ let asmrStore = {
 function saveASMRState() {
     localStorage.setItem('heartbeat_asmr_videos', JSON.stringify(asmrStore.videos));
     localStorage.setItem('heartbeat_asmr_player', JSON.stringify(asmrStore.playerState));
+    
+    // Sync with Extension
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.storage.local.set({ 
+            asmr_library: asmrStore.videos,
+            asmr_playerProps: asmrStore.playerState
+        });
+    }
 }
 
 function initASMR() {
@@ -1132,8 +1140,22 @@ function playASMRVideo(video) {
     asmrStore.playerState.isVisible = true;
     saveASMRState();
 
+    // Try to play in Extension first
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+            type: 'ASMR_PLAY',
+            video: video,
+            startTime: 0
+        });
+        // Optionally hide local player if extension is playing
+        playerContainer.classList.add('hidden');
+        return;
+    }
+
+    // Fallback to local player
     title.innerText = video.title;
     playerContainer.classList.remove('hidden');
+    // ... rest of local player logic ...
     playerContainer.classList.toggle('minimized', asmrStore.playerState.isMinimized);
     
     // Apply saved position/size

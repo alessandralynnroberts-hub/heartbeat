@@ -3,7 +3,8 @@
   "name": "Heartbeat Extension",
   "version": "1.2",
   "description": "Live progress tracking for your Heartbeat Artist projects.",
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_popup": "popup.html"
   },
@@ -16,6 +17,12 @@
       "js": ["content.js"],
       "css": ["styles.css"],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["asmr-player.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

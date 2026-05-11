@@ -97,22 +97,23 @@
             <!-- WORKSPACE VIEW -->
             <section id="workspace-view" class="view hidden">
                 <div class="workspace-nav">
-                    <button id="back-btn" class="btn-secondary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                        Back
-                    </button>
+                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                        <button id="back-btn" class="btn-secondary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            Back
+                        </button>
+                        <button id="workspace-duplicate-btn" class="btn-secondary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            Duplicate Project
+                        </button>
+                    </div>
                     <h2 id="workspace-title" class="workspace-title">Project Name</h2>
-                    <span id="workspace-type-badge" class="badge">Type</span>
-                    <button id="workspace-duplicate-btn" class="btn-secondary" style="margin-left: auto;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                        Duplicate Project
-                    </button>
                 </div>
 
                 <!-- Active Project Details & Tasks -->
                 <div class="project-wrapper">
                     <!-- Achievement Bar -->
-                    <div class="achievement-container" style="margin-bottom: 24px;">
+                    <div class="achievement-container" style="margin-bottom: 40px;">
                         <div class="achievement-track">
                             <div id="achievement-bar" class="achievement-fill" style="width: 0%"></div>
                         </div>
@@ -120,8 +121,9 @@
 
                     <!-- Tasks List Area -->
                     <div class="tasks-container">
-                        <div class="tasks-header">
+                        <div class="tasks-header" style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
                             <label>Project Tasks</label>
+                            <span id="workspace-type-badge" class="badge">Type</span>
                         </div>
                         <div style="display:flex; gap: 8px; margin-bottom: 12px;">
                             <input type="text" id="task-input" class="custom-input" placeholder="What needs to be done?" style="flex:1;">

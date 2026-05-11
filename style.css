@@ -966,6 +966,33 @@ h1, h2, h3, .workspace-title {
     text-transform: lowercase;
 }
 
+/* Workspace Specific Layout */
+.workspace-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 30px;
+    margin-bottom: 60px;
+}
+
+.workspace-title {
+    font-size: 4rem; /* Massive impact title */
+    line-height: 1;
+    margin: 0;
+    color: var(--text-main);
+    letter-spacing: -2px;
+}
+
+.badge {
+    background: var(--primary);
+    color: #000;
+    padding: 4px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
 /* Modals */
 .modal-overlay {
     position: fixed;

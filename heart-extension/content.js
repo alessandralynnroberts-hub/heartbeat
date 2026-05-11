@@ -55,6 +55,19 @@ function syncAll() {
             chrome.storage.local.set({ lastProgress: progress, lastProjectName: projectName });
             updateUI(progress, projectName);
         }
+
+        // ASMR Sync
+        const library = document.documentElement.getAttribute('data-asmr-library');
+        if (library) {
+            chrome.storage.local.set({ asmr_library: JSON.parse(library) });
+        }
+
+        const trigger = document.documentElement.getAttribute('data-asmr-trigger');
+        if (trigger) {
+            const data = JSON.parse(trigger);
+            chrome.runtime.sendMessage(data);
+            document.documentElement.removeAttribute('data-asmr-trigger');
+        }
     } else {
         // Persistent sync for non-Heartbeat pages
         chrome.storage.local.get(['lastProgress', 'lastProjectName'], (data) => {

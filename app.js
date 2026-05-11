@@ -994,13 +994,9 @@ function saveASMRState() {
     localStorage.setItem('heartbeat_asmr_videos', JSON.stringify(asmrStore.videos));
     localStorage.setItem('heartbeat_asmr_player', JSON.stringify(asmrStore.playerState));
     
-    // Sync with Extension
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.storage.local.set({ 
-            asmr_library: asmrStore.videos,
-            asmr_playerProps: asmrStore.playerState
-        });
-    }
+    // Sync with Extension via Data Attribute (Bridge)
+    document.documentElement.setAttribute('data-asmr-library', JSON.stringify(asmrStore.videos));
+    document.documentElement.setAttribute('data-asmr-player-props', JSON.stringify(asmrStore.playerState));
 }
 
 function initASMR() {
@@ -1133,44 +1129,25 @@ function renderASMRLibrary() {
 
 function playASMRVideo(video) {
     const playerContainer = document.getElementById('asmr-player-container');
-    const wrapper = document.getElementById('asmr-video-wrapper');
     const title = document.getElementById('asmr-player-title');
 
     asmrStore.activeVideoId = video.id;
     asmrStore.playerState.isVisible = true;
     saveASMRState();
 
-    // Try to play in Extension first
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-            type: 'ASMR_PLAY',
-            video: video,
-            startTime: 0
-        });
-        // Optionally hide local player if extension is playing
-        playerContainer.classList.add('hidden');
-        return;
-    }
-
-    // Fallback to local player
-    title.innerText = video.title;
-    playerContainer.classList.remove('hidden');
-    // ... rest of local player logic ...
-    playerContainer.classList.toggle('minimized', asmrStore.playerState.isMinimized);
+    // Trigger Extension Player via Data Attribute (Bridge)
+    document.documentElement.setAttribute('data-asmr-trigger', JSON.stringify({
+        type: 'ASMR_PLAY',
+        video: video,
+        startTime: 0,
+        ts: Date.now()
+    }));
     
-    // Apply saved position/size
-    playerContainer.style.left = asmrStore.playerState.x + 'px';
-    playerContainer.style.top = asmrStore.playerState.y + 'px';
-    playerContainer.style.width = asmrStore.playerState.width + 'px';
-    playerContainer.style.height = asmrStore.playerState.height + 'px';
-
-    wrapper.innerHTML = `
-        <iframe 
-            src="https://www.youtube-nocookie.com/embed/${video.videoId}?rel=0&modestbranding=1&autoplay=1&controls=1" 
-            allow="autoplay; encrypted-media" 
-            allowfullscreen>
-        </iframe>
-    `;
+    // Hide local player since extension is taking over
+    if (playerContainer) {
+        playerContainer.classList.add('hidden');
+        title.innerText = video.title; // For consistency
+    }
 }
 
 function initDraggablePlayer() {

@@ -1,7 +1,7 @@
 // asmr-injector.js
 (function() {
     if (window.asmrPlayerInitialized) {
-        console.log("[ASMR Lifecycle] Injector already active in this tab.");
+        console.log("[ASMR Lifecycle] Injector already active.");
         return;
     }
     window.asmrPlayerInitialized = true;
@@ -11,38 +11,42 @@
     let player = null;
     let heartbeatInterval = null;
     let videoData = null;
+    let resumeOverlay = null;
 
-    console.log("[ASMR Lifecycle] Injector initialized in tab.");
-
-    chrome.runtime.onMessage.addListener((msg) => {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.type === 'ASMR_UI_RENDER') {
-            console.log("[ASMR Lifecycle] ASMR_UI_RENDER received. Video:", msg.video.videoId);
             videoData = msg.video;
-            renderPlayer(msg.video, msg.time, msg.props);
+            renderPlayer(msg.video, msg.time, msg.volume, msg.props);
         }
         if (msg.type === 'ASMR_UI_REMOVE') {
-            console.log("[ASMR Lifecycle] ASMR_UI_REMOVE received. Cleaning up.");
             removePlayer();
+        }
+        if (msg.type === 'GET_STATE_SNAPSHOT') {
+            if (player && player.getCurrentTime) {
+                sendResponse({
+                    time: player.getCurrentTime(),
+                    volume: player.getVolume ? player.getVolume() : 100
+                });
+            } else {
+                sendResponse(null);
+            }
         }
     });
 
-    function renderPlayer(video, startTime, props) {
-        // Singleton Guard: If host already exists, just update it if possible, or remove and rebuild
+    function renderPlayer(video, startTime, volume, props) {
         let host = document.getElementById('heartbeat-asmr-host');
         if (host && container) {
-            console.log("[ASMR Lifecycle] Player already exists. Updating properties.");
             updatePlayerProps(props);
             return;
         }
 
         if (!container) {
-            console.log("[ASMR Lifecycle] Creating new player container.");
             host = host || document.createElement('div');
             host.id = 'heartbeat-asmr-host';
             if (!host.parentElement) document.body.appendChild(host);
             
             shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
-            shadow.innerHTML = ''; // Fresh start
+            shadow.innerHTML = '';
             
             const link = document.createElement('link');
             link.rel = 'stylesheet';
@@ -59,22 +63,27 @@
             shadow.appendChild(container);
 
             container.innerHTML = `
-                <div class="asmr-player-header" style="background:#fbbf24;color:#000;padding:4px 12px;display:flex;justify-content:space-between;cursor:move;font-weight:bold;font-size:11px;">
+                <div class="asmr-player-header" style="background:#fbbf24;color:#000;padding:4px 12px;display:flex;justify-content:space-between;cursor:move;font-weight:bold;font-size:11px;user-select:none;">
                     <span>FOCUS: ${video.title}</span>
                     <div class="asmr-player-controls">
-                        <button class="minimize-btn" style="background:none;border:none;cursor:pointer;">_</button>
-                        <button class="close-btn" style="background:none;border:none;cursor:pointer;">×</button>
+                        <button class="minimize-btn" style="background:none;border:none;cursor:pointer;padding:0 5px;">_</button>
+                        <button class="close-btn" style="background:none;border:none;cursor:pointer;padding:0 5px;">×</button>
                     </div>
                 </div>
-                <div class="asmr-video-wrapper" id="player-target" style="flex:1;background:#000;min-height:100px;"></div>
+                <div class="asmr-video-wrapper" style="flex:1;background:#000;min-height:100px;position:relative;">
+                    <div id="player-target" style="width:100%;height:100%;"></div>
+                    <div id="resume-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;color:#fbbf24;font-family:monospace;font-size:10px;z-index:10;transition:opacity 0.5s;">
+                        RESUMING FOCUS AUDIO...
+                    </div>
+                </div>
                 <div class="asmr-resize-handle"></div>
             `;
 
+            resumeOverlay = shadow.getElementById('resume-overlay');
             initDraggable(container, shadow.querySelector('.asmr-player-header'));
             initResizable(container, shadow.querySelector('.asmr-resize-handle'));
             
             shadow.querySelector('.close-btn').onclick = () => {
-                console.log("[ASMR Lifecycle] Close button clicked.");
                 chrome.runtime.sendMessage({ type: 'ASMR_STOP' });
                 removePlayer();
             };
@@ -87,16 +96,8 @@
 
         updatePlayerProps(props);
 
-        const startSec = Math.floor(startTime || 0);
+        const startSec = startTime || 0;
         const target = shadow.getElementById('player-target');
-
-        // Render Iframe immediately
-        target.innerHTML = `<iframe 
-            src="https://www.youtube-nocookie.com/embed/${video.videoId}?autoplay=1&start=${startSec}&rel=0&modestbranding=1" 
-            style="width:100%;height:100%;border:none;" 
-            allow="autoplay; encrypted-media" 
-            allowfullscreen>
-        </iframe>`;
 
         loadYouTubeAPI(() => {
             if (player) {
@@ -105,11 +106,23 @@
                 player = new YT.Player(target, {
                     height: '100%', width: '100%', videoId: video.videoId,
                     host: 'https://www.youtube-nocookie.com',
-                    playerVars: { 'autoplay': 1, 'controls': 1, 'start': startSec, 'origin': window.location.origin },
+                    playerVars: { 
+                        'autoplay': 1, 'controls': 1, 'start': Math.floor(startSec), 
+                        'origin': window.location.origin, 'modestbranding': 1, 'rel': 0 
+                    },
                     events: {
-                        'onReady': (event) => { startHeartbeat(); },
-                        'onStateChange': (event) => { if (event.data === YT.PlayerState.PAUSED) syncState(true); },
-                        'onError': (e) => { console.error("[ASMR Lifecycle] YT Player Error:", e.data); }
+                        'onReady': (event) => { 
+                            if (volume !== undefined) event.target.setVolume(volume);
+                            event.target.seekTo(startSec, true);
+                            startHeartbeat();
+                        },
+                        'onStateChange': (event) => { 
+                            if (event.data === YT.PlayerState.PLAYING) {
+                                if (resumeOverlay) resumeOverlay.style.opacity = '0';
+                                setTimeout(() => { if (resumeOverlay) resumeOverlay.style.display = 'none'; }, 500);
+                            }
+                            if (event.data === YT.PlayerState.PAUSED) syncState(true); 
+                        }
                     }
                 });
             }
@@ -148,6 +161,7 @@
         chrome.runtime.sendMessage({
             type: 'ASMR_HEARTBEAT',
             time: player.getCurrentTime(),
+            volume: player.getVolume ? player.getVolume() : 100,
             props: {
                 x: parseInt(container.style.left),
                 y: parseInt(container.style.top),
@@ -159,20 +173,11 @@
     }
 
     function removePlayer() {
-        console.log("[ASMR Lifecycle] removePlayer() called.");
         if (heartbeatInterval) clearInterval(heartbeatInterval);
-        heartbeatInterval = null;
-        
-        if (player) {
-            try { player.destroy(); } catch(e) {}
-            player = null;
-        }
-
+        if (player) { try { player.destroy(); } catch(e) {} }
         const host = document.getElementById('heartbeat-asmr-host');
         if (host) host.remove();
-        
         container = null;
-        shadow = null;
         window.asmrPlayerInitialized = false;
     }
 

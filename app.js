@@ -113,6 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     initApp();
     checkExtensionStatus();
+    if (typeof initASMR === 'function') initASMR();
 });
 
 function checkExtensionStatus() {
@@ -969,7 +970,241 @@ if (canvas) {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     });
     
-    window.addEventListener('mouseleave', () => {
-        isDrawing = false;
+/* ASMR SYSTEM LOGIC */
+let asmrStore = {
+    videos: JSON.parse(localStorage.getItem('heartbeat_asmr_videos') || '[]'),
+    activeVideoId: null,
+    playerState: JSON.parse(localStorage.getItem('heartbeat_asmr_player') || JSON.stringify({
+        x: 20,
+        y: 80,
+        width: 320,
+        height: 180,
+        isMinimized: false,
+        isVisible: false
+    }))
+};
+
+function saveASMRState() {
+    localStorage.setItem('heartbeat_asmr_videos', JSON.stringify(asmrStore.videos));
+    localStorage.setItem('heartbeat_asmr_player', JSON.stringify(asmrStore.playerState));
+}
+
+function initASMR() {
+    const toggleBtn = document.getElementById('asmr-toggle-btn');
+    const sidebar = document.getElementById('asmr-sidebar');
+    const closeBtn = document.getElementById('asmr-sidebar-close');
+    const addBtn = document.getElementById('asmr-add-btn');
+    const urlInput = document.getElementById('asmr-url-input');
+    const playerContainer = document.getElementById('asmr-player-container');
+    const playerClose = document.getElementById('asmr-player-close');
+    const playerMinimize = document.getElementById('asmr-player-minimize');
+
+    if (toggleBtn) toggleBtn.onclick = () => sidebar.classList.toggle('hidden');
+    if (closeBtn) closeBtn.onclick = () => sidebar.classList.add('hidden');
+
+    if (addBtn) {
+        addBtn.onclick = async () => {
+            const url = urlInput.value.trim();
+            if (!url) return;
+            
+            const videoId = extractYouTubeId(url);
+            if (!videoId) return alert("Invalid YouTube URL");
+
+            addBtn.innerText = "FETCHING...";
+            addBtn.disabled = true;
+
+            try {
+                const meta = await fetchYouTubeMetadata(videoId);
+                if (meta) {
+                    const newVideo = {
+                        id: Date.now().toString(),
+                        videoId,
+                        title: meta.title,
+                        creator: meta.channelTitle,
+                        thumbnail: meta.thumbnails.medium.url,
+                        duration: meta.duration,
+                        createdAt: new Date().toISOString()
+                    };
+                    asmrStore.videos.unshift(newVideo);
+                    saveASMRState();
+                    renderASMRLibrary();
+                    urlInput.value = "";
+                }
+            } catch (err) {
+                alert("Error fetching video metadata. Check your API key.");
+            } finally {
+                addBtn.innerText = "ADD TO LIBRARY";
+                addBtn.disabled = false;
+            }
+        };
+    }
+
+    if (playerClose) playerClose.onclick = () => {
+        asmrStore.playerState.isVisible = false;
+        saveASMRState();
+        playerContainer.classList.add('hidden');
+        document.getElementById('asmr-video-wrapper').innerHTML = '';
+    };
+
+    if (playerMinimize) playerMinimize.onclick = () => {
+        asmrStore.playerState.isMinimized = !asmrStore.playerState.isMinimized;
+        saveASMRState();
+        playerContainer.classList.toggle('minimized', asmrStore.playerState.isMinimized);
+    };
+
+    initDraggablePlayer();
+    initResizablePlayer();
+    renderASMRLibrary();
+    
+    // Restore player state
+    if (asmrStore.playerState.isVisible) {
+        const lastVideo = asmrStore.videos.find(v => v.id === asmrStore.activeVideoId) || asmrStore.videos[0];
+        if (lastVideo) playASMRVideo(lastVideo);
+    }
+}
+
+function extractYouTubeId(url) {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+
+async function fetchYouTubeMetadata(videoId) {
+    const apiKey = firebaseConfig.youtubeApiKey;
+    if (!apiKey || apiKey === "YOUR_YOUTUBE_API_KEY") {
+        throw new Error("Missing YouTube API Key");
+    }
+
+    const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`);
+    const data = await response.json();
+    if (data.items && data.items.length > 0) {
+        return {
+            ...data.items[0].snippet,
+            duration: data.items[0].contentDetails.duration
+        };
+    }
+    return null;
+}
+
+function renderASMRLibrary() {
+    const list = document.getElementById('asmr-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    asmrStore.videos.forEach(video => {
+        const card = document.createElement('div');
+        card.className = 'asmr-card';
+        card.innerHTML = `
+            <div class="asmr-card-thumb" style="background-image: url('${video.thumbnail}')"></div>
+            <div class="asmr-card-info">
+                <div class="asmr-card-title">${video.title}</div>
+                <div class="asmr-card-creator">${video.creator}</div>
+            </div>
+            <button class="asmr-card-remove" title="Remove">&times;</button>
+        `;
+
+        card.onclick = (e) => {
+            if (e.target.classList.contains('asmr-card-remove')) {
+                asmrStore.videos = asmrStore.videos.filter(v => v.id !== video.id);
+                saveASMRState();
+                renderASMRLibrary();
+                return;
+            }
+            playASMRVideo(video);
+        };
+
+        list.appendChild(card);
+    });
+}
+
+function playASMRVideo(video) {
+    const playerContainer = document.getElementById('asmr-player-container');
+    const wrapper = document.getElementById('asmr-video-wrapper');
+    const title = document.getElementById('asmr-player-title');
+
+    asmrStore.activeVideoId = video.id;
+    asmrStore.playerState.isVisible = true;
+    saveASMRState();
+
+    title.innerText = video.title;
+    playerContainer.classList.remove('hidden');
+    playerContainer.classList.toggle('minimized', asmrStore.playerState.isMinimized);
+    
+    // Apply saved position/size
+    playerContainer.style.left = asmrStore.playerState.x + 'px';
+    playerContainer.style.top = asmrStore.playerState.y + 'px';
+    playerContainer.style.width = asmrStore.playerState.width + 'px';
+    playerContainer.style.height = asmrStore.playerState.height + 'px';
+
+    wrapper.innerHTML = `
+        <iframe 
+            src="https://www.youtube-nocookie.com/embed/${video.videoId}?rel=0&modestbranding=1&autoplay=1&controls=1" 
+            allow="autoplay; encrypted-media" 
+            allowfullscreen>
+        </iframe>
+    `;
+}
+
+function initDraggablePlayer() {
+    const container = document.getElementById('asmr-player-container');
+    const header = document.getElementById('asmr-player-header');
+    let isDragging = false;
+    let offset = { x: 0, y: 0 };
+
+    header.onmousedown = (e) => {
+        isDragging = true;
+        offset.x = e.clientX - container.offsetLeft;
+        offset.y = e.clientY - container.offsetTop;
+        header.style.cursor = 'grabbing';
+    };
+
+    window.onmousemove = (e) => {
+        if (!isDragging) return;
+        const x = e.clientX - offset.x;
+        const y = e.clientY - offset.y;
+        
+        container.style.left = x + 'px';
+        container.style.top = y + 'px';
+        
+        asmrStore.playerState.x = x;
+        asmrStore.playerState.y = y;
+    };
+
+    window.onmouseup = () => {
+        if (isDragging) {
+            isDragging = false;
+            header.style.cursor = 'move';
+            saveASMRState();
+        }
+    };
+}
+
+function initResizablePlayer() {
+    const container = document.getElementById('asmr-player-container');
+    const handle = document.getElementById('asmr-resize-handle');
+    let isResizing = false;
+
+    handle.onmousedown = (e) => {
+        e.preventDefault();
+        isResizing = true;
+    };
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const width = e.clientX - container.offsetLeft;
+        const height = e.clientY - container.offsetTop;
+        
+        if (width > 200) container.style.width = width + 'px';
+        if (height > 150) container.style.height = height + 'px';
+        
+        asmrStore.playerState.width = parseInt(container.style.width);
+        asmrStore.playerState.height = parseInt(container.style.height);
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            saveASMRState();
+        }
     });
 }

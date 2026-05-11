@@ -31,6 +31,7 @@
                     <span id="user-email"></span>
                     <button id="sign-out-btn" class="btn-secondary" style="padding: 4px 12px; font-size: 0.7rem;">Sign Out</button>
                 </div>
+                <button id="asmr-toggle-btn" class="btn-secondary" style="padding: 4px 12px; font-size: 0.7rem; border-color: #fbbf24; color: #fbbf24;">ASMR</button>
                 <button id="sign-in-btn" class="btn-primary" style="padding: 4px 12px; font-size: 0.7rem;">Sign In</button>
             </div>
             <div class="logo">
@@ -208,6 +209,38 @@
                 <button id="share-modal-send" class="btn-primary">Invite Friend</button>
             </div>
         </div>
+    </div>
+
+    <!-- ASMR SIDEBAR -->
+    <div id="asmr-sidebar" class="asmr-sidebar hidden">
+        <div class="asmr-sidebar-header">
+            <h3>ASMR LIBRARY</h3>
+            <button id="asmr-sidebar-close" class="icon-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="asmr-add-box">
+            <input type="text" id="asmr-url-input" class="custom-input" placeholder="Paste YouTube URL...">
+            <button id="asmr-add-btn" class="btn-primary" style="width: 100%; margin-top: 8px;">ADD TO LIBRARY</button>
+        </div>
+        <div id="asmr-list" class="asmr-list">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <!-- ASMR FLOATING PLAYER -->
+    <div id="asmr-player-container" class="asmr-player-container hidden">
+        <div id="asmr-player-header" class="asmr-player-header">
+            <span id="asmr-player-title">ASMR Player</span>
+            <div class="asmr-player-controls">
+                <button id="asmr-player-minimize" title="Minimize">_</button>
+                <button id="asmr-player-close" title="Close">×</button>
+            </div>
+        </div>
+        <div id="asmr-video-wrapper" class="asmr-video-wrapper">
+            <!-- Iframe injected here -->
+        </div>
+        <div id="asmr-resize-handle" class="asmr-resize-handle"></div>
     </div>
 
     <!-- Application Logic -->

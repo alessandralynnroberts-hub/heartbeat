@@ -1,7 +1,6 @@
 // content.js
 document.documentElement.setAttribute('data-antigravity-heart-active', 'true');
 
-// Raw SVG for better reliability
 const HEART_SVG_RAW = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 11 11" shape-rendering="crispEdges">
     <rect x="2" y="2" width="2" height="1" fill="#fbbf24"/>
     <rect x="7" y="2" width="2" height="1" fill="#fbbf24"/>
@@ -41,16 +40,39 @@ function injectStyles() {
 injectStyles();
 
 function syncAll() {
-    const uid = document.documentElement.getAttribute('data-heartbeat-uid');
-    if (uid) chrome.storage.local.set({ heartbeat_uid: uid });
+    const isHeartbeatSite = window.location.href.includes('heartbeat') || window.location.href.includes('alive');
+    
+    if (isHeartbeatSite) {
+        const uid = document.documentElement.getAttribute('data-heartbeat-uid');
+        if (uid) chrome.storage.local.set({ heartbeat_uid: uid });
 
-    const progress = document.documentElement.getAttribute('data-heartbeat-progress');
-    const projectName = document.documentElement.getAttribute('data-heartbeat-project-name');
-    if (progress !== null && projectName !== null) {
-        chrome.storage.local.set({ lastProgress: progress, lastProjectName: projectName });
-        updateUI(progress, projectName);
+        const progress = document.documentElement.getAttribute('data-heartbeat-progress');
+        const projectName = document.documentElement.getAttribute('data-heartbeat-project-name');
+        
+        if (progress !== null && projectName !== null) {
+            chrome.storage.local.set({ lastProgress: progress, lastProjectName: projectName });
+            updateUI(progress, projectName);
+        }
+    } else {
+        // Persistent sync for non-Heartbeat pages
+        chrome.storage.local.get(['lastProgress', 'lastProjectName'], (data) => {
+            if (data.lastProgress !== undefined && data.lastProjectName) {
+                updateUI(data.lastProgress, data.lastProjectName);
+            }
+        });
     }
 }
+
+// Listen for direct messages from popup
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'SYNC_PROGRESS') {
+        updateUI(message.progress, message.projectName);
+        chrome.storage.local.set({ 
+            lastProgress: message.progress, 
+            lastProjectName: message.projectName 
+        });
+    }
+});
 
 const observer = new MutationObserver(() => syncAll());
 observer.observe(document.documentElement, { attributes: true });
@@ -60,7 +82,7 @@ setInterval(syncAll, 2000);
 let heartContainer = null;
 let heartImg = null;
 let progressFill = null;
-let posX = 100, posY = 100; // Defaults
+let posX = 100, posY = 100;
 let velX = 0, velY = 0;
 let isDragging = false;
 let lastMouseX, lastMouseY;
@@ -74,9 +96,12 @@ function initHeart() {
     posX = window.innerWidth - 150;
     posY = window.innerHeight - 200;
 
-    chrome.storage.local.get(['heartSize'], (data) => {
+    chrome.storage.local.get(['heartSize', 'lastProgress', 'lastProjectName'], (data) => {
         if (data.heartSize) currentSize = parseInt(data.heartSize);
         createHeartUI();
+        if (data.lastProgress !== undefined && data.lastProjectName) {
+            updateUI(data.lastProgress, data.lastProjectName);
+        }
         isInitializing = false;
     });
 }
@@ -192,7 +217,5 @@ if (document.readyState === 'loading') {
 } else {
     initHeart();
 }
-// Multi-pass initialization check
 setTimeout(initHeart, 500);
-setTimeout(initHeart, 1500);
-setTimeout(initHeart, 3000);
+setTimeout(initHeart, 2000);

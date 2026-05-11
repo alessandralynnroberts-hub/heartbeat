@@ -21,7 +21,7 @@ sizeRange.addEventListener('input', (e) => {
 function initSync() {
     try {
         firebase.initializeApp(firebaseConfig);
-    } catch (e) { /* ignore already initialized */ }
+    } catch (e) { /* already initialized */ }
     
     const db = firebase.firestore();
 
@@ -38,7 +38,6 @@ function initSync() {
             const btn = document.getElementById('manual-sync-btn');
             if (btn) btn.onclick = () => {
                 btn.innerText = "Syncing...";
-                // Open website if not open? No, just wait for storage.
                 setTimeout(initSync, 500);
             };
         }
@@ -79,17 +78,25 @@ function activateFromPopup(id, name, tasks) {
     });
     const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+    // Save to storage
     chrome.storage.local.set({ 
         lastProjectId: id,
         lastProjectName: name,
         lastProgress: progress
     }, () => {
-        chrome.runtime.sendMessage({
-            type: 'SYNC_PROGRESS',
-            progress: progress,
-            projectName: name,
-            projectId: id
+        // Broadcast to all tabs
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    type: 'SYNC_PROGRESS',
+                    progress: progress,
+                    projectName: name,
+                    projectId: id
+                }).catch(err => { /* ignore tabs without extension script */ });
+            });
         });
+
+        // Update UI in popup
         const items = document.querySelectorAll('.project-item');
         items.forEach(item => item.classList.toggle('active', item.innerText === name));
     });

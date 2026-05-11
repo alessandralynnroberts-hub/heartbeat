@@ -1,21 +1,13 @@
-// background.js (Singleton Authority)
+// background.js (Singleton Persistent Controller)
 let asmrState = {
     activeVideo: null,
     isPlaying: false,
     currentTime: 0,
-    currentTabId: null,
     volume: 100,
-    playerProps: { x: 20, y: 80, width: 320, height: 180, isMinimized: false }
+    playerWindowId: null
 };
 
-console.log("[ASMR Lifecycle] Background Service Worker Initialized");
-
-// Initialize from storage
-chrome.storage.local.get(['asmr_activeVideo', 'asmr_playerProps', 'asmr_volume'], (result) => {
-    if (result.asmr_activeVideo) asmrState.activeVideo = result.asmr_activeVideo;
-    if (result.asmr_playerProps) asmrState.playerProps = result.asmr_playerProps;
-    if (result.asmr_volume) asmrState.volume = result.asmr_volume;
-});
+console.log("[ASMR Lifecycle] Background Service Worker Initialized (Persistent Mode)");
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'SYNC_PROGRESS') {
@@ -33,122 +25,82 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     if (msg.type === 'ASMR_PLAY') {
-        const startT = performance.now();
         console.log("[ASMR Lifecycle] ASMR_PLAY requested.");
+        asmrState.activeVideo = msg.video;
+        asmrState.isPlaying = true;
+        asmrState.currentTime = msg.startTime || 0;
         
-        stopGlobalPlayback().then(() => {
-            asmrState.activeVideo = msg.video;
-            asmrState.isPlaying = true;
-            asmrState.currentTime = msg.startTime || 0;
-            asmrState.currentTabId = sender.tab?.id || msg.tabId;
-            
-            chrome.storage.local.set({ asmr_activeVideo: msg.video });
-            injectPlayerToTab(asmrState.currentTabId);
-            console.log(`[ASMR Lifecycle] Playback initialized in ${Math.round(performance.now() - startT)}ms`);
-        });
+        ensurePlayerWindowOpen();
     }
 
     if (msg.type === 'ASMR_STOP') {
+        console.log("[ASMR Lifecycle] ASMR_STOP requested.");
         stopGlobalPlayback();
     }
 
     if (msg.type === 'ASMR_HEARTBEAT') {
         asmrState.currentTime = msg.time;
-        asmrState.playerProps = msg.props;
         asmrState.volume = msg.volume;
-        
-        if (asmrState.currentTabId !== sender.tab?.id) {
-            console.warn("[ASMR Lifecycle] Orphan detected. Removing.");
-            chrome.tabs.sendMessage(sender.tab.id, { type: 'ASMR_UI_REMOVE' }).catch(() => {});
-        }
+    }
+
+    if (msg.type === 'GET_ASMR_STATE') {
+        sendResponse(asmrState);
     }
 });
 
-async function stopGlobalPlayback() {
-    if (asmrState.currentTabId) {
-        try {
-            const snapshot = await requestSnapshot(asmrState.currentTabId);
-            if (snapshot) {
-                asmrState.currentTime = snapshot.time;
-                asmrState.volume = snapshot.volume;
+function ensurePlayerWindowOpen() {
+    if (asmrState.playerWindowId) {
+        chrome.windows.get(asmrState.playerWindowId, (win) => {
+            if (chrome.runtime.lastError || !win) {
+                createPlayerWindow();
+            } else {
+                chrome.windows.update(asmrState.playerWindowId, { focused: true });
+                // Notify the existing window to play the new video
+                chrome.runtime.sendMessage({
+                    type: 'PLAYER_LOAD_VIDEO',
+                    video: asmrState.activeVideo,
+                    time: asmrState.currentTime
+                }).catch(() => {});
             }
-        } catch(e) {}
+        });
+    } else {
+        createPlayerWindow();
     }
+}
+
+function createPlayerWindow() {
+    const width = 360;
+    const height = 240;
     
+    chrome.windows.create({
+        url: chrome.runtime.getURL('player.html'),
+        type: 'popup',
+        width: width,
+        height: height,
+        top: 100,
+        left: 100
+    }, (win) => {
+        asmrState.playerWindowId = win.id;
+    });
+}
+
+function stopGlobalPlayback() {
     asmrState.isPlaying = false;
     asmrState.activeVideo = null;
-    chrome.storage.local.remove('asmr_activeVideo');
-    broadcastToTabs({ type: 'ASMR_UI_REMOVE' });
-    asmrState.currentTabId = null;
+    if (asmrState.playerWindowId) {
+        chrome.windows.remove(asmrState.playerWindowId).catch(() => {});
+        asmrState.playerWindowId = null;
+    }
 }
 
-function requestSnapshot(tabId) {
-    return new Promise((resolve) => {
-        chrome.tabs.sendMessage(tabId, { type: 'GET_STATE_SNAPSHOT' }, (response) => {
-            if (chrome.runtime.lastError || !response) resolve(null);
-            else resolve(response);
-        });
-        setTimeout(() => resolve(null), 150); // Hard timeout for seamlessness
-    });
-}
-
-// Tab Event Listeners for Ownership Transfer
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === 'complete' && asmrState.activeVideo && asmrState.isPlaying) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0] && tabs[0].id === tabId) {
-                transferOwnership(tabId);
-            }
-        });
+// Watch for window close
+chrome.windows.onRemoved.addListener((windowId) => {
+    if (windowId === asmrState.playerWindowId) {
+        asmrState.playerWindowId = null;
+        asmrState.isPlaying = false;
+        console.log("[ASMR Lifecycle] Player window closed.");
     }
 });
-
-chrome.tabs.onActivated.addListener((activeInfo) => {
-    if (asmrState.activeVideo && asmrState.isPlaying) {
-        transferOwnership(activeInfo.tabId);
-    }
-});
-
-async function transferOwnership(newTabId) {
-    if (asmrState.currentTabId === newTabId) return;
-
-    console.log("[ASMR Lifecycle] Starting ownership transfer...");
-    const startT = performance.now();
-
-    if (asmrState.currentTabId) {
-        const snapshot = await requestSnapshot(asmrState.currentTabId);
-        if (snapshot) {
-            asmrState.currentTime = snapshot.time;
-            asmrState.volume = snapshot.volume;
-            console.log("[ASMR Lifecycle] Snapshot captured at:", asmrState.currentTime);
-        }
-        chrome.tabs.sendMessage(asmrState.currentTabId, { type: 'ASMR_UI_REMOVE' }).catch(() => {});
-    }
-
-    asmrState.currentTabId = newTabId;
-    injectPlayerToTab(newTabId);
-    console.log(`[ASMR Lifecycle] Transfer completed in ${Math.round(performance.now() - startT)}ms`);
-}
-
-function injectPlayerToTab(tabId) {
-    if (!tabId) return;
-    chrome.tabs.get(tabId, (tab) => {
-        if (chrome.runtime.lastError || !tab.url || tab.url.startsWith('chrome://')) return;
-
-        chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['asmr-injector.js']
-        }).then(() => {
-            chrome.tabs.sendMessage(tabId, {
-                type: 'ASMR_UI_RENDER',
-                video: asmrState.activeVideo,
-                time: asmrState.currentTime,
-                volume: asmrState.volume,
-                props: asmrState.playerProps
-            }).catch(() => {});
-        });
-    });
-}
 
 function broadcastToTabs(msg, excludeTabId = null) {
     chrome.tabs.query({}, (tabs) => {

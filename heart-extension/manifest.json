@@ -1,28 +1,29 @@
 {
   "manifest_version": 3,
   "name": "Heartbeat Extension",
-  "version": "1.2",
-  "description": "Live progress tracking for your Heartbeat Artist projects.",
-  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "version": "1.3",
+  "description": "Live progress tracking and persistent ASMR Focus player.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "sidePanel",
+    "tabs",
+    "windows"
+  ],
   "host_permissions": ["<all_urls>"],
-  "action": {
-    "default_popup": "popup.html"
-  },
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "heart.png"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "css": ["styles.css"],
       "run_at": "document_start"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["asmr-player.css"],
-      "matches": ["<all_urls>"]
     }
   ]
 }
